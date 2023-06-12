@@ -1,4 +1,4 @@
-use std::{collections::HashMap, vec, hash::Hash};
+use std::collections::HashMap;
 
 type Sigma = Vec<char>;
 
