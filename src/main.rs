@@ -1,3 +1,7 @@
+mod transducer;
+use transducer::Transducer;
+
 fn main() {
-    println!("Hello, world!");
+    // TODO: read function from (csv?) file
+    let t = Transducer::from_dictionary(vec![]);
 }
