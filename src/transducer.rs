@@ -1,5 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
+mod utils;
+use utils::{Entry, longest_common_prefix};
+
 // T :: (Sigma, Monoid, Q, Init, F, Delata, Lambda, Iota, Psi)
 // Sigma :: [Char]
 // Monoid :: Int
@@ -18,25 +21,26 @@ pub struct Transducer {
     lambda: HashMap<(usize, char), usize>,
     iota: usize,
     psi: HashMap<usize, usize>,
+    min_except: Vec<char>,
 }
 
 impl Transducer {
-    pub fn from_word(word: Vec<char>, output: usize) -> Self {
+    pub fn from_word(entry: Entry) -> Self {
         let mut alphabet = HashSet::new();
         let mut states_with_finality: Vec<bool> = Vec::with_capacity(10000000);
         let mut delta = HashMap::new();
         let mut lambda = HashMap::new();
         let mut psi = HashMap::new();
 
-        for i in 0..word.len() {
-            alphabet.insert(word[i]);
+        for i in 0..entry.word.len() {
+            alphabet.insert(entry.word[i]);
             states_with_finality.push(false);
-            delta.insert((i, word[i + 1]), i + 1);
-            lambda.insert((i, word[i + 1]), 0);
+            delta.insert((i, entry.word[i + 1]), i + 1);
+            lambda.insert((i, entry.word[i + 1]), 0);
         }
 
-        states_with_finality[word.len() - 1] = true;
-        psi.insert(word.len() - 1, 0);
+        states_with_finality[entry.word.len() - 1] = true;
+        psi.insert(entry.word.len() - 1, 0);
 
         return Self {
             alphabet,
@@ -44,8 +48,9 @@ impl Transducer {
             init_state: 0,
             delta,
             lambda,
-            iota: output,
+            iota: entry.output,
             psi,
+            min_except: Vec::new(),
         };
     }
 
