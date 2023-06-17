@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 mod utils;
-use utils::{longest_common_prefix, Entry};
+pub use utils::{longest_common_prefix, Entry};
 
 pub struct Transducer {
     alphabet: HashSet<char>,
@@ -32,20 +32,20 @@ impl Transducer {
             finality.push(false);
 
             let mut state_transition = HashMap::new();
-            state_transition.insert(entry.word[i + 1], i + 1);
+            state_transition.insert(entry.word[i], i + 1);
             delta.insert(i, state_transition);
 
             let mut state_output = HashMap::new();
-            state_output.insert(entry.word[i + 1], 0);
+            state_output.insert(entry.word[i], 0);
             lambda.insert(i, state_output);
         }
 
-        finality[n - 1] = true;
-        psi.insert(n - 1, 0);
+        finality.push(true);
+        psi.insert(n, 0);
 
         return Self {
             alphabet,
-            states: (0..n).collect(),
+            states: (0..n + 1).collect(),
             finality,
             init_state: 0,
             delta,
@@ -54,6 +54,18 @@ impl Transducer {
             psi,
             min_except: Vec::new(),
         };
+    }
+
+    pub fn print(&self) {
+        println!("T alphabet: {:?}", self.alphabet);
+        println!("T states: {:?}", self.states);
+        println!("T finality: {:?}", self.finality);
+        println!("T init_state: {:?}", self.init_state);
+        println!("T delta: {:?}", self.delta);
+        println!("T lambda: {:?}", self.lambda);
+        println!("T iota: {:?}", self.iota);
+        println!("T psi: {:?}", self.psi);
+        println!("T min_except: {:?}", self.min_except);
     }
 
     // Make the transducer min except in (last_word ^ new_word)
@@ -71,6 +83,9 @@ impl Transducer {
             Some(q) => {
                 self.states.remove(&tn);
                 self.finality[q] = false;
+                self.delta.remove(&tn);
+                todo!();
+                // delta[]
                 // TODO ...
             }
             None => {
@@ -88,11 +103,12 @@ impl Transducer {
 
     // delta[(q,a)] will panic if delta is not defined
     // what if a = epsilon
-    fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
-        let mut next = self.delta[&self.init_state][&w[0]];
+    // TODO: make private
+    pub fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
+        let mut next = self.init_state;
         let mut states = vec![next];
 
-        for i in 1..w.len() {
+        for i in 0..w.len() {
             next = self.delta[&next][&w[i]];
             states.push(next);
         }
