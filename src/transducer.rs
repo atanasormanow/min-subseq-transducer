@@ -75,18 +75,23 @@ impl Transducer {
     }
 
     fn reduce_except_step(&mut self) {
-        let t_w = self.state_sequence(&self.min_except);
-        // t_w cannot be empty (would panic earlier)
-        let tn = t_w[t_w.len() - 1];
+        let w = &self.min_except;
+        let t_w = self.state_sequence(&w);
+
+        let an = w[w.len() - 1];
+        let tn = t_w[w.len()];
+        let tn_prev = t_w[w.len() - 1]; // Note: will fail if min_except = epsilon
 
         match self.state_eq(tn, &t_w) {
             Some(q) => {
                 self.states.remove(&tn);
                 self.finality[q] = false;
                 self.delta.remove(&tn);
-                todo!();
-                // delta[]
-                // TODO ...
+                self.delta
+                    .get_mut(&tn_prev)
+                    .and_then(|tn_prev_trans| tn_prev_trans.insert(an, q));
+                self.lambda.remove(&tn);
+                self.psi.remove(&tn);
             }
             None => {
                 self.min_except.pop();
@@ -102,7 +107,6 @@ impl Transducer {
     }
 
     // delta[(q,a)] will panic if delta is not defined
-    // what if a = epsilon
     // TODO: make private
     pub fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
         let mut next = self.init_state;
