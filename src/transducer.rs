@@ -1,7 +1,8 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+mod tests;
 mod utils;
-pub use utils::{longest_common_prefix, Entry};
+use utils::longest_common_prefix;
 
 pub struct Transducer {
     alphabet: HashSet<char>,
@@ -19,8 +20,22 @@ pub struct Transducer {
     trans_order_partitions: Vec<Vec<usize>>,
 }
 
+pub struct Entry {
+    pub word: Vec<char>,
+    pub output: usize,
+}
+
+impl Entry {
+    pub fn new(word: &str, output: usize) -> Self {
+        Self {
+            word: word.chars().collect(),
+            output,
+        }
+    }
+}
+
 impl Transducer {
-    pub fn from_word(entry: Entry) -> Self {
+    pub fn from_entry(entry: Entry) -> Self {
         let n = entry.word.len();
         let mut alphabet = HashSet::new();
         let mut finality: Vec<bool> = Vec::with_capacity(10000000);
@@ -142,7 +157,7 @@ impl Transducer {
 
     // delta[(q,a)] will panic if delta is not defined
     // TODO: make private
-    pub fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
+    fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
         let mut next = self.init_state;
         let mut states = vec![next];
 

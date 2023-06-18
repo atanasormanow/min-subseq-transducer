@@ -1,8 +1,3 @@
-pub struct Entry {
-    pub word: Vec<char>,
-    pub output: usize,
-}
-
 pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
     let mut lcp = Vec::new();
 
