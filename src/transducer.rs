@@ -1,8 +1,26 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::{collections::{BTreeSet, HashMap, HashSet}, panic};
 
 mod tests;
 mod utils;
 use utils::longest_common_prefix;
+
+pub struct Entry {
+    pub word: Vec<char>,
+    pub output: usize,
+}
+
+impl Entry {
+    pub fn new(word: &str, output: usize) -> Self {
+        Self {
+            word: word.chars().collect(),
+            output,
+        }
+    }
+
+    pub fn from_tuple((word, output): (&str, usize)) -> Self {
+        Entry::new(word, output)
+    }
+}
 
 pub struct Transducer {
     alphabet: HashSet<char>,
@@ -17,21 +35,7 @@ pub struct Transducer {
     iota: usize,
     psi: HashMap<usize, usize>,
     min_except: Vec<char>,
-    trans_order_partitions: Vec<Vec<usize>>,
-}
-
-pub struct Entry {
-    pub word: Vec<char>,
-    pub output: usize,
-}
-
-impl Entry {
-    pub fn new(word: &str, output: usize) -> Self {
-        Self {
-            word: word.chars().collect(),
-            output,
-        }
-    }
+    trans_order_partitions: Vec<BTreeSet<usize>>,
 }
 
 impl Transducer {
@@ -69,7 +73,7 @@ impl Transducer {
             iota: entry.output,
             psi,
             min_except: Vec::new(),
-            trans_order_partitions: vec![vec![n], (0..n).collect()],
+            trans_order_partitions: vec![BTreeSet::from([n]), (0..n).collect()],
         };
     }
 
@@ -83,12 +87,17 @@ impl Transducer {
         println!("T iota: {:?}", self.iota);
         println!("T psi: {:?}", self.psi);
         println!("T min_except: {:?}", self.min_except);
+        println!("T partitions by transition order: {:?}", self.trans_order_partitions);
     }
 
     // Make the transducer min except in (last_word ^ new_word)
-    fn reduce_except_prefix(&self, next_word: &Vec<char>) {
-        let target = longest_common_prefix(&self.min_except, next_word);
-        // TODO reduce until target is reached
+    fn reduce_except_prefix(&mut self, next_word: &Vec<char>) {
+        let common_prefix = longest_common_prefix(&self.min_except, next_word);
+        let reduction_length = self.min_except.len() - common_prefix.len();
+
+        for _ in 0..reduction_length {
+            self.reduce_except_step();
+        }
     }
 
     fn reduce_except_step(&mut self) {
@@ -102,11 +111,18 @@ impl Transducer {
         match self.state_eq(tn, &t_w) {
             Some(q) => {
                 self.states.remove(&tn);
-                self.finality[q] = false;
+                self.finality[tn] = false;
+
+                // TODO: do this in a better way
+                let _ = self.delta.get(&tn).is_some_and(|tn_trans| {
+                    self.trans_order_partitions[tn_trans.len()].remove(&tn)
+                });
+
                 self.delta.remove(&tn);
                 self.delta
                     .get_mut(&tn_prev)
                     .and_then(|tn_prev_trans| tn_prev_trans.insert(an, q));
+
                 self.lambda.remove(&tn);
                 self.psi.remove(&tn);
             }
@@ -119,7 +135,7 @@ impl Transducer {
     // TODO: How to check for equal states?
     // 1) have states partitioned based on their number of transitions
     // 2) check if tn is equal to some state with the same number of transitions
-    // TODO: test and optimise
+    // TODO: test, optimise, refactor and test again
     fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
         let state_trans_part = match self.finality[state] {
             true => 0,
@@ -128,6 +144,10 @@ impl Transducer {
         };
 
         for q in &self.trans_order_partitions[state_trans_part] {
+            if t_w.contains(q) {
+                continue;
+            }
+
             let cond1 = self.finality[state] == self.finality[*q];
             let cond2 = !self.finality[state] || self.psi[&state] == self.psi[&q];
             let mut cond3 = true;
@@ -169,11 +189,23 @@ impl Transducer {
         return states;
     }
 
-    pub fn add_word_in_order(&self, word: Vec<char>) {
-        todo!();
+    pub fn add_entry_in_order(&self, entry_raw: (&str, usize)) {
+        let entry = Entry::from_tuple(entry_raw);
+        todo!()
     }
 
-    pub fn from_dictionary(dictionary: Vec<(Vec<char>, usize)>) -> Self {
-        todo!();
+    pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
+        if dictionary.is_empty() {
+            panic!("Cannot construct empty transducer (yet)!");
+        }
+
+        let first_entry = Entry::from_tuple(dictionary[0]);
+        let transducer = Transducer::from_entry(first_entry);
+
+        for e in &dictionary[1..] {
+            transducer.add_entry_in_order(*e);
+        }
+
+        return transducer;
     }
 }
