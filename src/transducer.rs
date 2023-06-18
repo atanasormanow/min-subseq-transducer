@@ -16,6 +16,7 @@ pub struct Transducer {
     iota: usize,
     psi: HashMap<usize, usize>,
     min_except: Vec<char>,
+    trans_order_partitions: Vec<Vec<usize>>,
 }
 
 impl Transducer {
@@ -53,6 +54,7 @@ impl Transducer {
             iota: entry.output,
             psi,
             min_except: Vec::new(),
+            trans_order_partitions: vec![vec![n], (0..n).collect()],
         };
     }
 
@@ -100,10 +102,42 @@ impl Transducer {
     }
 
     // TODO: How to check for equal states?
-    // 1) separate states in buckets based on their number of transitions
+    // 1) have states partitioned based on their number of transitions
     // 2) check if tn is equal to some state with the same number of transitions
+    // TODO: test and optimise
     fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
-        todo!();
+        let state_trans_part = match self.finality[state] {
+            true => 0,
+            // Will panic if there is no transition with `state`
+            false => self.delta[&state].len(),
+        };
+
+        for q in &self.trans_order_partitions[state_trans_part] {
+            let cond1 = self.finality[state] == self.finality[*q];
+            let cond2 = !self.finality[state] || self.psi[&state] == self.psi[&q];
+            let mut cond3 = true;
+
+            for a in &self.alphabet {
+                let dsa = self.delta.get(&state)?.get(a);
+                let dqa = self.delta.get(&q)?.get(a);
+                let lsa = self.lambda.get(&state)?.get(a);
+                let lqa = self.lambda.get(&q)?.get(a);
+
+                match (dsa, dqa, lsa, lqa) {
+                    (None, None, _, _) => (),
+                    (Some(q1), Some(q2), Some(m1), Some(m2)) => {
+                        cond3 = cond3 && q1 == q2 && m1 == m2;
+                    }
+                    _ => cond3 = false,
+                }
+            }
+
+            if cond1 && cond2 && cond3 {
+                return Some(*q);
+            }
+        }
+
+        return None;
     }
 
     // delta[(q,a)] will panic if delta is not defined
