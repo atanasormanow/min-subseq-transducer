@@ -196,9 +196,9 @@ impl Transducer {
     pub fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
         let state_is_final = self.finality.contains(&state);
         // No transitions if delta(state) is undefined
-        let state_trans_part = self.delta.get(&state).map_or(0, |trans| trans.len());
+        let state_trans_order = self.delta.get(&state).map_or(0, |trans| trans.len());
 
-        for q in &self.trans_order_partitions[state_trans_part] {
+        for q in &self.trans_order_partitions[state_trans_order] {
             if t_w.contains(q) {
                 continue;
             }
@@ -208,21 +208,20 @@ impl Transducer {
             let mut cond3 = true;
 
             for a in &self.alphabet {
-                println!("Here i am in the for loop for: {:?}", self.alphabet);
-                let dsa = self.delta.get(&state)?.get(a);
-                let dqa = self.delta.get(&q)?.get(a);
-                let lsa = self.lambda.get(&state)?.get(a);
-                let lqa = self.lambda.get(&q)?.get(a);
+                let dsa = self.delta.get(&state).and_then(|trans| trans.get(a));
+                let dqa = self.delta.get(&q).and_then(|trans| trans.get(a));
+                let lsa = self.lambda.get(&state).and_then(|trans| trans.get(a));
+                let lqa = self.lambda.get(&q).and_then(|trans| trans.get(a));
 
-                println!("delta(state,a), lambda(state,a): {:?}, {:?}", dsa, lsa);
-                println!("delta(q,a), lambda(q,a): {:?}, {:?}", dqa, lqa);
                 match (dsa, dqa, lsa, lqa) {
                     (None, None, _, _) => (),
                     (Some(q1), Some(q2), Some(m1), Some(m2)) => {
                         cond3 = cond3 && q1 == q2 && m1 == m2;
                     }
-                    _ => cond3 = false,
-                }
+                    _ => {
+                        cond3 = false;
+                    }
+                };
             }
 
             // Return the first match
