@@ -21,7 +21,7 @@ mod tests {
     }
 
     #[test]
-    fn state_sequence_works() {
+    fn find_state_sequence_for_a_word() {
         let transducer = example_transducer();
 
         assert_eq!(
@@ -32,9 +32,10 @@ mod tests {
     }
 
     #[test]
-    fn reduce_except_one_works() {
+    fn reduce_except_by_one_char() {
         let mut transducer = example_transducer();
         transducer.reduce_except_by_one();
+        // TODO
     }
 
     #[test]
@@ -75,9 +76,17 @@ mod tests {
     }
 
     #[test]
-    fn found_equivalent_state() {
+    fn find_equivalent_state() {
         let transducer = example_transducer();
         assert_eq!(transducer.state_eq(6, &vec![0, 1, 2, 6]), Some(5));
+    }
+
+    #[test]
+    fn transducer_output_function() {
+        let transducer = example_transducer();
+        assert_eq!(transducer.output(vec!['c','a','b']), 15);
+        assert_eq!(transducer.output(vec!['c', 'a', 'b','a', 'b']), 10);
+        assert_eq!(transducer.output(vec!['c','a','d']), 8);
     }
 
     // Helper functions

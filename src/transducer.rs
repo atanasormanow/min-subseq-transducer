@@ -74,49 +74,115 @@ impl Transducer {
 
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
         let new_entry = Entry::new(word, output);
-        let t_w = self.state_sequence(&self.min_except);
         let k = longest_common_prefix(&self.min_except, &new_entry.word).len();
-        let new_state = self.finality.len(); // NOTE: states are never removed from finality
-        let new_suffix_len = self.min_except.len() - k;
+        let new_suffix_len = new_entry.word.len() - k;
+        let max_state = *self
+            .states
+            .last()
+            .expect("The transducer should have at least 1 state!");
 
         // Make the transducer min except in (last_entry ^ new_entry)
-        for _ in 0..new_suffix_len {
+        for _ in 0..(self.min_except.len() - k) {
             self.reduce_except_by_one();
         }
 
-        // Add new states for the missing suffix
-        for i in 0..new_suffix_len {
-            self.states.insert(new_state + i);
+        // Add new (final) states for the missing suffix
+        for i in 1..=new_suffix_len {
+            self.states.insert(max_state + i);
+        }
+        self.finality.insert(max_state + new_suffix_len);
+
+        // Add a transition from the existing prefix
+        self.add_delta_transition(k, new_entry.word[k], max_state + 1);
+
+        // Add the transitions for the missing suffix
+        for i in 1..new_suffix_len {
+            self.add_delta_transition(max_state + i, new_entry.word[k + i], max_state + i + 1);
         }
 
-        self.finality.insert(new_state + new_suffix_len);
+        let new_entry_states = self.state_sequence(&new_entry.word);
 
-        // Add a transition from the existing state
-        self.add_delta_transition(k, new_entry.word[0], new_state + k + 1);
-        // Add the transitions for the missing suffix
-        for i in 0..new_suffix_len {
-            self.add_delta_transition(
-                new_state + i,
-                new_entry.word[new_entry.word.len() + i + 1],
-                new_state + i + 1,
+        for i in 1..=k {
+            let curr_output = self.lambda_i(i, new_entry.output);
+            let prev_output = self.lambda_i(i - 1, new_entry.output);
+            self.add_lambda_transition(
+                new_entry_states[i - 1],
+                self.min_except[i - 1],
+                curr_output - prev_output,
+            );
+            println!(
+                "New lambda entry in set 1: {:?}",
+                (
+                    new_entry_states[i - 1],
+                    self.min_except[i - 1],
+                    curr_output - prev_output
+                )
             );
         }
 
+        self.add_lambda_transition(
+            new_entry_states[k],
+            new_entry.word[1],
+            new_entry.output - self.lambda_i(k, new_entry.output),
+        );
+
+        println!(
+            "New lambda entry in set 2: {:?}",
+            (
+                new_entry_states[k],
+                new_entry.word[1],
+                new_entry.output - self.lambda_i(k, new_entry.output)
+            )
+        );
+
+        for i in 1..new_suffix_len {
+            self.add_lambda_transition(max_state + i, new_entry.word[k + i], 0);
+            println!(
+                "New lambda entry in set 3: {:?}",
+                (max_state + i, new_entry.word[k + i], 0)
+            );
+        }
+
+        // TODO: refactor?
+        for i in 0..=k {
+            for ch in self.alphabet.iter() {
+                let is_lambda_defined = self
+                    .lambda
+                    .get(&new_entry_states[i])
+                    .and_then(|trans| trans.get(ch))
+                    .is_some();
+
+                if *ch != new_entry.word[i] && is_lambda_defined {
+                    // TODO: this seems like it would be slow
+                    let mut ai_ch = new_entry.word[0..i].to_vec();
+                    ai_ch.push(*ch);
+                    let output =
+                        self.iota + self.lambda_star(&ai_ch) - self.lambda_i(i, new_entry.output);
+
+                    // NOTE: this is basically add_lambda_transition
+                    // but Rust doesn't like the call :(
+                    match self.lambda.get_mut(&new_entry_states[i]) {
+                        Some(dq1) => {
+                            dq1.insert(*ch, output);
+                        }
+                        None => {
+                            let q1_trans = HashMap::from([(*ch, output)]);
+                            self.lambda.insert(new_entry_states[i], q1_trans);
+                        }
+                    }
+                    println!(
+                        "New lambda entry in set 4: {:?}",
+                        (new_entry_states[i], ch, output)
+                    );
+                }
+            }
+        }
+
+        self.print_with_message("-> after updating lambda:");
+
         self.iota = min(self.iota, new_entry.output);
 
-        for t in &t_w {
-            self.lambda.remove(t);
-        }
-        for i in 1..k {
-            let curr_output = self.lambda_i(i, new_entry.output);
-            let prev_output = self.lambda_i(i - 1, new_entry.output);
-            self.add_lambda_transition(t_w[i], self.min_except[i], curr_output - prev_output);
-        }
-        self.add_lambda_transition(
-            t_w[t_w.len() - 1],
-            new_entry.word[0],
-            new_entry.output - self.lambda_i(k - 1, new_entry.output),
-        ); // TODO: more lambda updates
+        // TODO: continue by updating psi and trans_order_partitions
 
         // The resulting Transducer is minimal except in the new_entry
         self.min_except = new_entry.word;
@@ -135,7 +201,17 @@ impl Transducer {
             transducer.add_entry_in_order(w, o);
         }
 
+        transducer.reduce_to_epsilon();
         return transducer;
+    }
+
+    pub fn output(&self, word: Vec<char>) -> usize {
+        let final_output = self
+            .state_sequence(&word)
+            .last()
+            .and_then(|q| self.psi.get(q))
+            .unwrap_or(&0);
+        return self.iota + self.lambda_star(&word) + final_output;
     }
 
     pub fn print(&self) {
@@ -152,6 +228,11 @@ impl Transducer {
             "T partitions by transition order: {:?}",
             self.trans_order_partitions
         );
+    }
+
+    fn print_with_message(&self, message: &str) {
+        println!("{:?}", message);
+        self.print();
     }
 
     ///////////////////
@@ -233,6 +314,12 @@ impl Transducer {
         return None;
     }
 
+    fn reduce_to_epsilon(&mut self) {
+        while !self.min_except.is_empty() {
+            self.reduce_except_by_one();
+        }
+    }
+
     // NOTE: delta[(q,a)] will panic if delta is not defined
     fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
         let mut next = self.init_state;
@@ -272,17 +359,21 @@ impl Transducer {
 
     // NOTE: make sure using min_except is enough
     fn lambda_i(&self, i: usize, beta: usize) -> usize {
-        let word_prefix_i = &self.min_except[..=i].to_vec();
+        let word_prefix_i = &self.min_except[..i].to_vec();
         return min(self.iota + self.lambda_star(word_prefix_i), beta);
     }
 
     // TODO: seems like this has taken a word that is not in the language
     // accumulate word output, starting from the initial state
     fn lambda_star(&self, word: &Vec<char>) -> usize {
+        // println!("Here is my word for lambda_star: {:?}", word);
         let mut output = 0;
         let mut state = self.init_state;
 
         for ch in word {
+            // println!("Here is lambda and delta of ({:?}, {:?})", state, ch);
+            // println!("With lambda being: {:?}", self.lambda);
+            // println!("With delta being: {:?}", self.delta);
             output += self.lambda[&state][ch];
             state = self.delta[&state][ch];
         }
