@@ -22,13 +22,19 @@ mod tests {
 
     #[test]
     fn state_sequence_works() {
-        let transducer = Transducer::from_entry("cab", 15);
+        let transducer = example_transducer();
 
         assert_eq!(
             transducer.state_sequence(&vec!['c', 'a', 'b']),
             vec![0, 1, 2, 3]
         );
         assert_eq!(transducer.state_sequence(&vec!['c', 'a']), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn reduce_except_one_works() {
+        let mut transducer = example_transducer();
+        transducer.reduce_except_by_one();
     }
 
     #[test]

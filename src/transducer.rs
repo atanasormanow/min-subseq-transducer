@@ -157,7 +157,7 @@ impl Transducer {
     ///////////////////
     // Private functions:
     //////////////////////
-    fn reduce_except_by_one(&mut self) {
+    pub fn reduce_except_by_one(&mut self) {
         let w = &self.min_except;
         let t_w = self.state_sequence(&w);
 
@@ -165,15 +165,15 @@ impl Transducer {
         let tn = t_w[w.len()];
         let tn_prev = t_w[w.len() - 1]; // Note: will fail if min_except = epsilon
 
+        // TODO: should do this for every equal state
+        // TODO: refactor as None arm is empty
         match self.state_eq(tn, &t_w) {
             Some(q) => {
                 self.states.remove(&tn);
-                self.finality.insert(tn);
+                self.finality.remove(&tn);
 
-                // TODO: do this in a better way
-                let _ = self.delta.get(&tn).is_some_and(|tn_trans| {
-                    self.trans_order_partitions[tn_trans.len()].remove(&tn)
-                });
+                let state_trans_order = self.delta.get(&tn).map_or(0, |trans| trans.len());
+                self.trans_order_partitions[state_trans_order].remove(&tn);
 
                 self.delta.remove(&tn);
                 self.delta
@@ -183,10 +183,10 @@ impl Transducer {
                 self.lambda.remove(&tn);
                 self.psi.remove(&tn);
             }
-            None => {
-                self.min_except.pop();
-            }
+            None => {}
         }
+
+        self.min_except.pop();
     }
 
     // Check for equal states by:
