@@ -244,7 +244,7 @@ impl Transducer {
     ///////////////////
     // Private functions:
     //////////////////////
-    pub fn reduce_except_by_one(&mut self) {
+    fn reduce_except_by_one(&mut self) {
         let w = &self.min_except;
         let t_w = self.state_sequence(&w);
 
@@ -280,7 +280,7 @@ impl Transducer {
     // 1) have states partitioned based on their number of transitions
     // 2) check if tn is equal to some state with the same number of transitions
     // TODO: test, optimise, refactor and test again
-    pub fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
+    fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
         let state_is_final = self.finality.contains(&state);
         // No transitions if delta(state) is undefined
         let state_trans_order = self.delta.get(&state).map_or(0, |trans| trans.len());
