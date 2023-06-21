@@ -81,6 +81,10 @@ impl Transducer {
             .last()
             .expect("The transducer should have at least 1 state!");
 
+        for ch in &new_entry.word {
+            self.alphabet.insert(*ch);
+        }
+
         // Make the transducer min except in (last_entry ^ new_entry)
         for _ in 0..(self.min_except.len() - k) {
             self.reduce_except_by_one();
@@ -102,6 +106,25 @@ impl Transducer {
 
         let new_entry_states = self.state_sequence(&new_entry.word);
 
+        // Update transition order partitions
+        for i in (k + 1)..(new_entry_states.len() - 1) {
+            self.trans_order_partitions[1].insert(new_entry_states[i]);
+        }
+        // NOTE: this happens after updting delta
+        let tk_trans_order = self
+            .delta
+            .get(&new_entry_states[k])
+            .map_or(0, |trans| trans.len());
+        self.trans_order_partitions[tk_trans_order - 1].remove(&new_entry_states[k]);
+        if tk_trans_order == self.trans_order_partitions.len() {
+            let new_partition = BTreeSet::from([new_entry_states[k]]);
+            self.trans_order_partitions.push(new_partition);
+        } else {
+            self.trans_order_partitions[tk_trans_order].insert(new_entry_states[k]);
+        }
+        self.trans_order_partitions[0].insert(*new_entry_states.last().unwrap());
+
+        // Update output transitions
         for i in 1..=k {
             let curr_output = self.lambda_i(i, new_entry.output);
             let prev_output = self.lambda_i(i - 1, new_entry.output);
@@ -138,8 +161,8 @@ impl Transducer {
                     let output =
                         self.iota + self.lambda_star(&ai_ch) - self.lambda_i(i, new_entry.output);
 
-                    // NOTE: this is basically add_lambda_transition
-                    // but Rust doesn't like the call :(
+                    // NOTE: this is add_lambda_transition but inlined
+                    // to avoid borrowing self as mutable and immutable at the same time
                     match self.lambda.get_mut(&new_entry_states[i]) {
                         Some(dq1) => {
                             dq1.insert(*ch, output);
@@ -153,11 +176,19 @@ impl Transducer {
             }
         }
 
-        self.print_with_message("-> after updating lambda:");
+        for i in 1..=k {
+            if self.finality.contains(&new_entry_states[i]) {
+                let final_output =
+                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, self.iota);
+                self.psi.insert(new_entry_states[i], final_output);
+            }
+        }
+        new_entry_states
+            .last()
+            .and_then(|tm| self.psi.insert(*tm, 0));
 
+        // Update iota last, as lambda and psi use the old value
         self.iota = min(self.iota, new_entry.output);
-
-        // TODO: continue by updating psi and trans_order_partitions
 
         // The resulting Transducer is minimal except in the new_entry
         self.min_except = new_entry.word;
@@ -180,7 +211,7 @@ impl Transducer {
         return transducer;
     }
 
-    pub fn output(&self, word: Vec<char>) -> usize {
+    pub fn output(&self, word: &Vec<char>) -> usize {
         let final_output = self
             .state_sequence(&word)
             .last()
@@ -338,17 +369,11 @@ impl Transducer {
         return min(self.iota + self.lambda_star(word_prefix_i), beta);
     }
 
-    // TODO: seems like this has taken a word that is not in the language
-    // accumulate word output, starting from the initial state
     fn lambda_star(&self, word: &Vec<char>) -> usize {
-        // println!("Here is my word for lambda_star: {:?}", word);
         let mut output = 0;
         let mut state = self.init_state;
 
         for ch in word {
-            // println!("Here is lambda and delta of ({:?}, {:?})", state, ch);
-            // println!("With lambda being: {:?}", self.lambda);
-            // println!("With delta being: {:?}", self.delta);
             output += self.lambda[&state][ch];
             state = self.delta[&state][ch];
         }
