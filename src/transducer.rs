@@ -110,14 +110,6 @@ impl Transducer {
                 self.min_except[i - 1],
                 curr_output - prev_output,
             );
-            println!(
-                "New lambda entry in set 1: {:?}",
-                (
-                    new_entry_states[i - 1],
-                    self.min_except[i - 1],
-                    curr_output - prev_output
-                )
-            );
         }
 
         self.add_lambda_transition(
@@ -126,21 +118,8 @@ impl Transducer {
             new_entry.output - self.lambda_i(k, new_entry.output),
         );
 
-        println!(
-            "New lambda entry in set 2: {:?}",
-            (
-                new_entry_states[k],
-                new_entry.word[1],
-                new_entry.output - self.lambda_i(k, new_entry.output)
-            )
-        );
-
         for i in 1..new_suffix_len {
             self.add_lambda_transition(max_state + i, new_entry.word[k + i], 0);
-            println!(
-                "New lambda entry in set 3: {:?}",
-                (max_state + i, new_entry.word[k + i], 0)
-            );
         }
 
         // TODO: refactor?
@@ -170,10 +149,6 @@ impl Transducer {
                             self.lambda.insert(new_entry_states[i], q1_trans);
                         }
                     }
-                    println!(
-                        "New lambda entry in set 4: {:?}",
-                        (new_entry_states[i], ch, output)
-                    );
                 }
             }
         }
