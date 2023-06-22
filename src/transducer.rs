@@ -40,38 +40,6 @@ pub struct Transducer {
 }
 
 impl Transducer {
-    pub fn from_entry(word: &str, output: usize) -> Self {
-        let entry = Entry::new(word, output);
-        let n = entry.word.len();
-
-        let mut alphabet = HashSet::new();
-        let mut delta = HashMap::new();
-        let mut lambda = HashMap::new();
-
-        for i in 0..n {
-            alphabet.insert(entry.word[i]);
-
-            let state_transition = HashMap::from([(entry.word[i], i + 1)]);
-            delta.insert(i, state_transition);
-
-            let state_output = HashMap::from([(entry.word[i], 0)]);
-            lambda.insert(i, state_output);
-        }
-
-        return Self {
-            alphabet,
-            states: (0..=n).collect(),
-            finality: HashSet::from([n]),
-            init_state: 0,
-            delta,
-            lambda,
-            iota: entry.output,
-            psi: HashMap::from([(n, 0)]),
-            min_except: entry.word,
-            trans_order_partitions: vec![BTreeSet::from([n]), (0..n).collect()],
-        };
-    }
-
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
         let new_entry = Entry::new(word, output);
         let k = longest_common_prefix(&self.min_except, &new_entry.word).len();
@@ -146,7 +114,6 @@ impl Transducer {
             self.add_lambda_transition(max_state + i, new_entry.word[k + i], 0);
         }
 
-        // TODO: refactor?
         for i in 0..=k {
             for ch in self.alphabet.iter() {
                 let is_lambda_defined = self
@@ -162,7 +129,7 @@ impl Transducer {
                     let output =
                         self.iota + self.lambda_star(&ai_ch) - self.lambda_i(i, new_entry.output);
 
-                    // NOTE: this is add_lambda_transition but inlined
+                    // NOTE: this is the inlined code of add_lambda_transition
                     // to avoid borrowing self as mutable and immutable at the same time
                     match self.lambda.get_mut(&new_entry_states[i]) {
                         Some(dq1) => {
@@ -193,6 +160,14 @@ impl Transducer {
 
         // The resulting Transducer is minimal except in the new_entry
         self.min_except = new_entry.word;
+    }
+
+    pub fn add_entry_out_of_order(&mut self, word: &str, output: usize) {
+        todo!();
+    }
+
+    pub fn remove_entry_with_word(&mut self, word: &str) {
+        todo!();
     }
 
     pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
@@ -237,7 +212,7 @@ impl Transducer {
         );
     }
 
-    fn print_with_message(&self, message: &str) {
+    pub fn print_with_message(&self, message: &str) {
         println!("{:?}", message);
         self.print();
     }
@@ -245,6 +220,38 @@ impl Transducer {
     ///////////////////
     // Private functions:
     //////////////////////
+    fn from_entry(word: &str, output: usize) -> Self {
+        let entry = Entry::new(word, output);
+        let n = entry.word.len();
+
+        let mut alphabet = HashSet::new();
+        let mut delta = HashMap::new();
+        let mut lambda = HashMap::new();
+
+        for i in 0..n {
+            alphabet.insert(entry.word[i]);
+
+            let state_transition = HashMap::from([(entry.word[i], i + 1)]);
+            delta.insert(i, state_transition);
+
+            let state_output = HashMap::from([(entry.word[i], 0)]);
+            lambda.insert(i, state_output);
+        }
+
+        return Self {
+            alphabet,
+            states: (0..=n).collect(),
+            finality: HashSet::from([n]),
+            init_state: 0,
+            delta,
+            lambda,
+            iota: entry.output,
+            psi: HashMap::from([(n, 0)]),
+            min_except: entry.word,
+            trans_order_partitions: vec![BTreeSet::from([n]), (0..n).collect()],
+        };
+    }
+
     fn reduce_except_by_one(&mut self) {
         let w = &self.min_except;
         let t_w = self.state_sequence(&w);
@@ -277,10 +284,52 @@ impl Transducer {
         self.min_except.pop();
     }
 
+    fn is_state_convergent(&self, state: usize) -> bool {
+        return match state {
+            4 => true,
+            5 => true,
+            _ => false,
+        };
+    }
+
+    pub fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
+        let mut t_w = self.state_sequence(word);
+        let mut max_state = *self.states.last().expect("States cannot be empty!");
+
+        for i in 1..=word.len() {
+            if self.is_state_convergent(t_w[i]) {
+                max_state += 1;
+                let new_state = max_state;
+
+                self.states.insert(new_state);
+
+                self.add_delta_transition(t_w[i - 1], word[i - 1], new_state);
+
+                if let Some(trans) = self.delta.get(&t_w[i]).cloned() {
+                    self.trans_order_partitions[trans.len()].insert(new_state);
+                    self.delta.insert(new_state, trans);
+                } else {
+                    self.trans_order_partitions[0].insert(new_state);
+                }
+
+                if let Some(output_trans) = self.lambda.get(&t_w[i]).cloned() {
+                    self.lambda.insert(new_state, output_trans);
+                }
+
+                if self.finality.contains(&t_w[i]) {
+                    self.finality.insert(new_state);
+                    self.psi.insert(new_state, self.psi[&t_w[i]]);
+                }
+
+                t_w[i] = max_state;
+            }
+            self.min_except.push(word[i - 1]);
+        }
+    }
+
     // Check for equal states by:
     // 1) have states partitioned based on their number of transitions
     // 2) check if tn is equal to some state with the same number of transitions
-    // TODO: test, optimise, refactor and test again
     fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
         let state_is_final = self.finality.contains(&state);
         // No transitions if delta(state) is undefined
@@ -380,5 +429,32 @@ impl Transducer {
         }
 
         return output;
+    }
+
+    fn clone_state(&self, state: usize) -> usize {
+        todo!();
+    }
+
+    fn canonicalise_suffix(&self, state: usize) {
+        todo!();
+    }
+
+    fn longest_common_prefix(&self, word: &Vec<char>) -> Vec<char> {
+        let mut state = 0;
+        let mut prefix = Vec::new();
+
+        for i in 0..word.len() {
+            match self.delta.get(&state).and_then(|trans| trans.get(&word[i])) {
+                Some(q) => {
+                    state = *q;
+                    prefix.push(word[i]);
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+
+        return prefix;
     }
 }
