@@ -81,16 +81,17 @@ impl Transducer {
             .last()
             .expect("The transducer should have at least 1 state!");
 
-        for ch in &new_entry.word {
-            self.alphabet.insert(*ch);
-        }
-
         // Make the transducer min except in (last_entry ^ new_entry)
         for _ in 0..(self.min_except.len() - k) {
             self.reduce_except_by_one();
         }
 
-        // Add new (final) states for the missing suffix
+        // Add potentially new characters to the alphabet
+        for i in k..new_entry.word.len() {
+            self.alphabet.insert(new_entry.word[i]);
+        }
+
+        // Add new (final) states and extend alphabet for the missing suffix
         for i in 1..=new_suffix_len {
             self.states.insert(max_state + i);
         }
@@ -137,7 +138,7 @@ impl Transducer {
 
         self.add_lambda_transition(
             new_entry_states[k],
-            new_entry.word[1],
+            new_entry.word[k],
             new_entry.output - self.lambda_i(k, new_entry.output),
         );
 
@@ -179,7 +180,7 @@ impl Transducer {
         for i in 1..=k {
             if self.finality.contains(&new_entry_states[i]) {
                 let final_output =
-                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, self.iota);
+                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, new_entry.output);
                 self.psi.insert(new_entry_states[i], final_output);
             }
         }
@@ -291,7 +292,7 @@ impl Transducer {
             }
 
             let cond1 = state_is_final == self.finality.contains(q);
-            let cond2 = !state_is_final || self.psi[&state] == self.psi[q];
+            let cond2 = !state_is_final || self.psi.get(&state) == self.psi.get(q);
             let mut cond3 = true;
 
             for a in &self.alphabet {
