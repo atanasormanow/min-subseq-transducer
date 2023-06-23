@@ -194,10 +194,6 @@ impl Transducer {
         self.reduce_to_epsilon();
     }
 
-    fn delete_state(&self, state: usize) {
-        todo!();
-    }
-
     pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
         if dictionary.is_empty() {
             panic!("Cannot construct empty transducer");
@@ -301,7 +297,10 @@ impl Transducer {
             let state_trans_order = self.delta.get(&tn).map_or(0, |trans| trans.len());
             self.trans_order_partitions[state_trans_order].remove(&tn);
 
+            // NOTE: tn shouldn't have any transitions in delta_inv
+            self.delta_inv.remove(&tn);
             self.delta.remove(&tn);
+
             self.add_delta_transition(tn_prev, an, q);
 
             self.lambda.remove(&tn);
@@ -316,47 +315,53 @@ impl Transducer {
             panic!("Transduser is minimal except in non-empty word!");
         }
 
-        let mut t_w = self.state_sequence(word);
+        let mut current_state = self.init_state;
         let mut max_state = *self.states.last().expect("States cannot be empty!");
 
-        for i in 1..=word.len() {
-            if self.is_state_convergent(t_w[i]) {
+        for i in 0..word.len() {
+            let next_state = self.delta[&current_state][&word[i]];
+
+            if self.is_state_convergent(next_state) {
                 max_state += 1;
                 let new_state = max_state;
 
                 self.states.insert(new_state);
 
-                self.add_delta_transition(t_w[i - 1], word[i - 1], new_state);
+                self.add_delta_transition(current_state, word[i], new_state);
 
-                // TODO: borow checker workaround, cloned() here is redundant
-                // TODO: "match" instead of "if let" ?
-                if let Some(trans) = self.delta.get(&t_w[i]).cloned() {
-                    self.trans_order_partitions[trans.len()].insert(new_state);
-                    for (ch, q) in trans.iter() {
-                        self.add_delta_transition(new_state, *ch, *q);
-                    }
-                } else {
-                    self.trans_order_partitions[0].insert(new_state);
+                if let Some(trans) = self.delta_inv.get_mut(&next_state) {
+                    trans.remove(&(word[i], current_state));
                 }
 
-                if let Some(output_trans) = self.lambda.get(&t_w[i]).cloned() {
+                if self.finality.contains(&next_state) {
+                    self.finality.insert(new_state);
+                    self.psi.insert(new_state, self.psi[&next_state]);
+                }
+
+                let trans_order = self.delta.get(&next_state).map_or(0, |trans| trans.len());
+                self.trans_order_partitions[trans_order].insert(new_state);
+
+                if trans_order > 0 {
+                    for (ch, q) in self.delta[&next_state].clone() {
+                        self.add_delta_transition(new_state, ch, q);
+                    }
+                }
+
+                if let Some(output_trans) = self.lambda.get(&next_state).cloned() {
                     self.lambda.insert(new_state, output_trans);
                 }
 
-                if self.finality.contains(&t_w[i]) {
-                    self.finality.insert(new_state);
-                    self.psi.insert(new_state, self.psi[&t_w[i]]);
-                }
-
-                t_w[i] = max_state;
+                current_state = new_state;
+            } else {
+                current_state = next_state;
             }
-            self.min_except.push(word[i - 1]);
+
+            self.min_except.push(word[i]);
         }
     }
 
     fn is_state_convergent(&self, state: usize) -> bool {
-        // NOTE: this would break for the initial state
-        return self.delta_inv[&state].len() > 1;
+        return self.delta_inv.get(&state).map_or(0, |trans| trans.len()) > 1;
     }
 
     // Check for equal states by:
