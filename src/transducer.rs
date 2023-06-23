@@ -20,23 +20,20 @@ impl Entry {
             output,
         }
     }
-
-    pub fn from_tuple((word, output): (&str, usize)) -> Self {
-        Entry::new(word, output)
-    }
 }
 
 pub struct Transducer {
-    pub alphabet: HashSet<char>,
-    pub states: BTreeSet<usize>,
-    pub finality: HashSet<usize>,
-    pub init_state: usize,
-    pub delta: HashMap<usize, HashMap<char, usize>>,
-    pub lambda: HashMap<usize, HashMap<char, usize>>,
-    pub iota: usize,
-    pub psi: HashMap<usize, usize>,
-    pub min_except: Vec<char>,
-    pub trans_order_partitions: Vec<BTreeSet<usize>>,
+    alphabet: HashSet<char>,
+    states: BTreeSet<usize>,
+    finality: HashSet<usize>,
+    init_state: usize,
+    delta: HashMap<usize, HashMap<char, usize>>,
+    delta_inv: HashMap<usize, HashSet<(char, usize)>>,
+    lambda: HashMap<usize, HashMap<char, usize>>,
+    iota: usize,
+    psi: HashMap<usize, usize>,
+    min_except: Vec<char>,
+    trans_order_partitions: Vec<BTreeSet<usize>>,
 }
 
 impl Transducer {
@@ -166,13 +163,44 @@ impl Transducer {
         todo!();
     }
 
-    pub fn remove_entry_with_word(&mut self, word: &str) {
+    pub fn remove_entry_with_word(&mut self, word_raw: &str) {
+        let word = word_raw.chars().collect();
+        self.increase_except_from_epsilon_to_word(&word);
+
+        let t_w = self.state_sequence(&word);
+
+        let mut i = t_w.len() - 1;
+        loop {
+            self.delta.remove(&t_w[i]);
+            self.lambda.remove(&t_w[i]);
+            self.states.remove(&t_w[i]);
+            self.finality.remove(&t_w[i]);
+
+            if i < 1
+                || self
+                    .delta
+                    .get(&t_w[i + 1])
+                    .is_some_and(|trans| trans.len() > 1)
+                || self.finality.contains(&t_w[i + 1])
+            // TODO i must remove finality if it was final -_-
+            {
+                break;
+            }
+
+            i -= 1;
+        }
+        // TODO: update tk
+
+        self.reduce_to_epsilon();
+    }
+
+    fn delete_state(&self, state: usize) {
         todo!();
     }
 
     pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
         if dictionary.is_empty() {
-            panic!("Cannot construct empty transducer (yet)!");
+            panic!("Cannot construct empty transducer");
         }
 
         let (w, o) = dictionary[0];
@@ -202,6 +230,7 @@ impl Transducer {
         println!("T finality: {:?}", self.finality);
         println!("T init_state: {:?}", self.init_state);
         println!("T delta: {:?}", self.delta);
+        println!("T delta inversed: {:?}", self.delta_inv);
         println!("T lambda: {:?}", self.lambda);
         println!("T iota: {:?}", self.iota);
         println!("T psi: {:?}", self.psi);
@@ -226,6 +255,7 @@ impl Transducer {
 
         let mut alphabet = HashSet::new();
         let mut delta = HashMap::new();
+        let mut delta_inv = HashMap::new();
         let mut lambda = HashMap::new();
 
         for i in 0..n {
@@ -233,6 +263,8 @@ impl Transducer {
 
             let state_transition = HashMap::from([(entry.word[i], i + 1)]);
             delta.insert(i, state_transition);
+
+            delta_inv.insert(i + 1, HashSet::from([(entry.word[i], i)]));
 
             let state_output = HashMap::from([(entry.word[i], 0)]);
             lambda.insert(i, state_output);
@@ -244,6 +276,7 @@ impl Transducer {
             finality: HashSet::from([n]),
             init_state: 0,
             delta,
+            delta_inv,
             lambda,
             iota: entry.output,
             psi: HashMap::from([(n, 0)]),
@@ -260,39 +293,29 @@ impl Transducer {
         let tn = t_w[w.len()];
         let tn_prev = t_w[w.len() - 1]; // Note: will fail if min_except = epsilon
 
-        // TODO: should do this for every equal state
-        // TODO: refactor as None arm is empty
-        match self.state_eq(tn, &t_w) {
-            Some(q) => {
-                self.states.remove(&tn);
-                self.finality.remove(&tn);
+        // TODO: do this for every equal state?
+        if let Some(q) = self.state_eq(tn, &t_w) {
+            self.states.remove(&tn);
+            self.finality.remove(&tn);
 
-                let state_trans_order = self.delta.get(&tn).map_or(0, |trans| trans.len());
-                self.trans_order_partitions[state_trans_order].remove(&tn);
+            let state_trans_order = self.delta.get(&tn).map_or(0, |trans| trans.len());
+            self.trans_order_partitions[state_trans_order].remove(&tn);
 
-                self.delta.remove(&tn);
-                self.delta
-                    .get_mut(&tn_prev)
-                    .and_then(|tn_prev_trans| tn_prev_trans.insert(an, q));
+            self.delta.remove(&tn);
+            self.add_delta_transition(tn_prev, an, q);
 
-                self.lambda.remove(&tn);
-                self.psi.remove(&tn);
-            }
-            None => {}
+            self.lambda.remove(&tn);
+            self.psi.remove(&tn);
         }
 
         self.min_except.pop();
     }
 
-    fn is_state_convergent(&self, state: usize) -> bool {
-        return match state {
-            4 => true,
-            5 => true,
-            _ => false,
-        };
-    }
-
     pub fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
+        if !self.min_except.is_empty() {
+            panic!("Transduser is minimal except in non-empty word!");
+        }
+
         let mut t_w = self.state_sequence(word);
         let mut max_state = *self.states.last().expect("States cannot be empty!");
 
@@ -305,9 +328,13 @@ impl Transducer {
 
                 self.add_delta_transition(t_w[i - 1], word[i - 1], new_state);
 
+                // TODO: borow checker workaround, cloned() here is redundant
+                // TODO: "match" instead of "if let" ?
                 if let Some(trans) = self.delta.get(&t_w[i]).cloned() {
                     self.trans_order_partitions[trans.len()].insert(new_state);
-                    self.delta.insert(new_state, trans);
+                    for (ch, q) in trans.iter() {
+                        self.add_delta_transition(new_state, *ch, *q);
+                    }
                 } else {
                     self.trans_order_partitions[0].insert(new_state);
                 }
@@ -325,6 +352,11 @@ impl Transducer {
             }
             self.min_except.push(word[i - 1]);
         }
+    }
+
+    fn is_state_convergent(&self, state: usize) -> bool {
+        // NOTE: this would break for the initial state
+        return self.delta_inv[&state].len() > 1;
     }
 
     // Check for equal states by:
@@ -371,7 +403,7 @@ impl Transducer {
     }
 
     fn reduce_to_epsilon(&mut self) {
-        while !self.min_except.is_empty() {
+        for _ in 0..self.min_except.len() {
             self.reduce_except_by_one();
         }
     }
@@ -391,20 +423,27 @@ impl Transducer {
 
     fn add_delta_transition(&mut self, q1: usize, a: char, q2: usize) {
         match self.delta.get_mut(&q1) {
-            Some(dq1) => {
-                dq1.insert(a, q2);
+            Some(dq_1) => {
+                dq_1.insert(a, q2);
             }
             None => {
-                let q1_trans = HashMap::from([(a, q2)]);
-                self.delta.insert(q1, q1_trans);
+                self.delta.insert(q1, HashMap::from([(a, q2)]));
+            }
+        }
+        match self.delta_inv.get_mut(&q2) {
+            Some(di_q2) => {
+                di_q2.insert((a, q1));
+            }
+            None => {
+                self.delta_inv.insert(q2, HashSet::from([(a, q1)]));
             }
         }
     }
 
     fn add_lambda_transition(&mut self, q1: usize, a: char, m: usize) {
         match self.lambda.get_mut(&q1) {
-            Some(dq1) => {
-                dq1.insert(a, m);
+            Some(d_q1) => {
+                d_q1.insert(a, m);
             }
             None => {
                 let q1_trans = HashMap::from([(a, m)]);
@@ -435,7 +474,7 @@ impl Transducer {
         todo!();
     }
 
-    fn canonicalise_suffix(&self, state: usize) {
+    fn canonicalise_suffix(&self, word: &Vec<char>) {
         todo!();
     }
 
