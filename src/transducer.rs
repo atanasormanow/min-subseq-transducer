@@ -164,32 +164,46 @@ impl Transducer {
     }
 
     pub fn remove_entry_with_word(&mut self, word_raw: &str) {
+        if word_raw == "" {
+            panic!("The transducer is undefined for epsilon input!");
+        }
+
         let word = word_raw.chars().collect();
-        self.increase_except_from_epsilon_to_word(&word);
+        let mut prev_state = self.increase_except_from_epsilon_to_word(&word);
 
-        let t_w = self.state_sequence(&word);
+        // NOTE: increase_except_from_epsilon_to_word leaves the path without any convergent
+        // states, meaning that all states have only one ingoing transition
+        let mut curr_state = self.delta_inv[&prev_state].iter().last().unwrap().1;
 
-        let mut i = t_w.len() - 1;
+        self.delete_state(&prev_state);
+
         loop {
-            self.delta.remove(&t_w[i]);
-            self.lambda.remove(&t_w[i]);
-            self.states.remove(&t_w[i]);
-            self.finality.remove(&t_w[i]);
-
-            if i < 1
-                || self
-                    .delta
-                    .get(&t_w[i + 1])
-                    .is_some_and(|trans| trans.len() > 1)
-                || self.finality.contains(&t_w[i + 1])
-            // TODO i must remove finality if it was final -_-
-            {
+            if curr_state == self.init_state {
                 break;
             }
 
-            i -= 1;
+            if self.finality.contains(&curr_state) {
+                self.finality.remove(&curr_state);
+                self.psi.remove(&curr_state);
+                self.canonicalise_from_state(curr_state);
+                break;
+            }
+
+            let has_more_transitions = self
+                .delta
+                .get(&curr_state)
+                .is_some_and(|trans| trans.len() > 1);
+
+            if has_more_transitions {
+                self.canonicalise_from_state(curr_state);
+                break;
+            }
+
+            prev_state = curr_state;
+            curr_state = self.delta_inv[&curr_state].iter().last().unwrap().1;
+
+            self.delete_state(&prev_state);
         }
-        // TODO: update tk
 
         self.reduce_to_epsilon();
     }
@@ -310,9 +324,10 @@ impl Transducer {
         self.min_except.pop();
     }
 
-    pub fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
+    // NOTE: returns the last and final state that reads the word
+    pub fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) -> usize {
         if !self.min_except.is_empty() {
-            panic!("Transduser is minimal except in non-empty word!");
+            panic!("Transduser must be minimal except in epsilon!");
         }
 
         let mut current_state = self.init_state;
@@ -358,6 +373,8 @@ impl Transducer {
 
             self.min_except.push(word[i]);
         }
+
+        return current_state;
     }
 
     fn is_state_convergent(&self, state: usize) -> bool {
@@ -475,11 +492,33 @@ impl Transducer {
         return output;
     }
 
+    fn delete_state(&mut self, state: &usize) {
+        if *state == self.init_state {
+            panic!("Cannot delete init state!");
+        }
+
+        let trans_order = self.delta.get(state).map_or(0, |trans| trans.len());
+
+        self.trans_order_partitions[trans_order].remove(state);
+
+        // NOTE: this won't work only for the initial state
+        let preds = self.delta_inv.remove(state).unwrap();
+        for (ch, q) in preds {
+            self.delta.get_mut(&q).and_then(|trans| trans.remove(&ch));
+        }
+
+        self.delta.remove(state);
+        self.lambda.remove(state);
+        self.states.remove(state);
+        self.finality.remove(state);
+        self.psi.remove(state);
+    }
+
     fn clone_state(&self, state: usize) -> usize {
         todo!();
     }
 
-    fn canonicalise_suffix(&self, word: &Vec<char>) {
+    fn canonicalise_from_state(&self, state: usize) {
         todo!();
     }
 
