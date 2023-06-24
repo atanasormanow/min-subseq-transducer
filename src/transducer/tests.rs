@@ -125,7 +125,7 @@ mod tests {
             transducer.delta_inv,
             HashMap::from([
                 (1, HashSet::from([('c', 0)])),
-                (2, HashSet::from([('a', 5)])),
+                (2, HashSet::from([('a', 1)])),
                 (3, HashSet::from([('b', 2)])),
                 (4, HashSet::from([('a', 3), ('a', 7)])),
                 (5, HashSet::from([('b', 4), ('d', 2)])),
