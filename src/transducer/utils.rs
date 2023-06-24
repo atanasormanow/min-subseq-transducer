@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
     let mut lcp = Vec::new();
 
@@ -10,4 +12,45 @@ pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
     }
 
     return lcp;
+}
+
+pub fn remove_from_or_delete(map: &mut HashMap<usize, HashMap<char, usize>>, q: &usize, ch: &char) {
+    match map.get_mut(q) {
+        Some(trans) => {
+            if trans.get(ch).is_some() && trans.len() == 1 {
+                map.remove(q);
+            } else {
+                trans.remove(ch);
+            }
+        }
+        None => {
+            map.remove(q);
+        }
+    }
+}
+
+pub fn vec_copy_take<T>(v: &Vec<T>, i: usize) -> Vec<T>
+where
+    T: Copy,
+{
+    let mut prefix = Vec::new();
+
+    for j in 0..i {
+        prefix.push(v[j]);
+    }
+
+    return prefix;
+}
+
+pub fn vec_copy_drop<T>(v: &Vec<T>, i: usize) -> Vec<T>
+where
+    T: Copy,
+{
+    let mut suffix = Vec::new();
+
+    for j in i..v.len() {
+        suffix.push(v[j]);
+    }
+
+    return suffix;
 }
