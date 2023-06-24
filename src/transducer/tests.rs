@@ -52,6 +52,59 @@ mod tests {
     }
 
     #[test]
+    fn remove_word_from_transducer() {
+        let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
+        let mut transducer = Transducer::from_dictionary(dictionary);
+        transducer.remove_entry_with_word("cabab");
+
+        assert_eq!(transducer.alphabet, HashSet::from(['a', 'b', 'c', 'd']));
+        assert_eq!(transducer.states, BTreeSet::from([0, 1, 2, 4, 5, 7]));
+        assert_eq!(transducer.finality, BTreeSet::from([5]));
+        assert_eq!(transducer.init_state, 0);
+        assert_eq!(
+            transducer.delta,
+            HashMap::from([
+                (0, HashMap::from([('c', 1)])),
+                (1, HashMap::from([('b', 7), ('a', 2)])),
+                (2, HashMap::from([('b', 5), ('d', 5)])),
+                (4, HashMap::from([('b', 5)])),
+                (7, HashMap::from([('a', 4)])),
+            ])
+        );
+        assert_eq!(
+            transducer.delta_inv,
+            HashMap::from([
+                (1, HashSet::from([('c', 0)])),
+                (2, HashSet::from([('a', 1)])),
+                (4, HashSet::from([('a', 7)])),
+                (5, HashSet::from([('b', 4), ('d', 2), ('b', 2)])),
+                (7, HashSet::from([('b', 1)])),
+            ])
+        );
+        assert_eq!(
+            transducer.lambda,
+            HashMap::from([
+                (0, HashMap::from([('c', 0)])),
+                (1, HashMap::from([('b', 0), ('a', 5)])),
+                (2, HashMap::from([('b', 7), ('d', 0)])),
+                (4, HashMap::from([('b', 0)])),
+                (7, HashMap::from([('a', 0)])),
+            ])
+        );
+        assert_eq!(transducer.iota, 3);
+        assert_eq!(transducer.psi, HashMap::from([(5, 0)]));
+        assert_eq!(transducer.min_except, Vec::new());
+        assert_eq!(
+            transducer.trans_order_partitions,
+            Vec::from([
+                BTreeSet::from([5]),
+                BTreeSet::from([0, 4, 7]),
+                BTreeSet::from([1, 2]),
+            ])
+        );
+    }
+
+    #[test]
     fn transducer_from_entry_and_add_once() {
         let mut transducer = Transducer::from_entry("baba", 10);
         transducer.add_entry_in_order("bc", 15);
