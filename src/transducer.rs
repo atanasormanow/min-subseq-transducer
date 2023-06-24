@@ -315,8 +315,6 @@ impl Transducer {
         }
 
         self.min_except.pop();
-        // println!("~ After reducing by one got {:?}", self.min_except);
-        // self.print_with_message("-> Got this transducer")
     }
 
     // NOTE: returns the last and final state that reads the word
