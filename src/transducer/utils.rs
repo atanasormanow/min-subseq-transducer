@@ -15,16 +15,11 @@ pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
 }
 
 pub fn remove_from_or_delete(map: &mut HashMap<usize, HashMap<char, usize>>, q: &usize, ch: &char) {
-    match map.get_mut(q) {
-        Some(trans) => {
-            if trans.get(ch).is_some() && trans.len() == 1 {
-                map.remove(q);
-            } else {
-                trans.remove(ch);
-            }
-        }
-        None => {
+    if let Some(trans) = map.get_mut(q) {
+        if trans.get(ch).is_some() && trans.len() == 1 {
             map.remove(q);
+        } else {
+            trans.remove(ch);
         }
     }
 }
