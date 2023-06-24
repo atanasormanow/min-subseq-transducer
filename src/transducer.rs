@@ -6,7 +6,7 @@ use std::{
 
 mod tests;
 mod utils;
-use utils::longest_common_prefix;
+use utils::{longest_common_prefix, remove_from_or_delete};
 
 pub struct Entry {
     pub word: Vec<char>,
@@ -25,7 +25,7 @@ impl Entry {
 pub struct Transducer {
     alphabet: HashSet<char>,
     states: BTreeSet<usize>,
-    finality: HashSet<usize>,
+    finality: BTreeSet<usize>,
     init_state: usize,
     delta: HashMap<usize, HashMap<char, usize>>,
     delta_inv: HashMap<usize, HashSet<(char, usize)>>,
@@ -169,40 +169,34 @@ impl Transducer {
         }
 
         let word = word_raw.chars().collect();
-        let mut prev_state = self.increase_except_from_epsilon_to_word(&word);
+        let mut curr_state = self.increase_except_from_epsilon_to_word(&word);
+        let mut prev_state;
 
-        // NOTE: increase_except_from_epsilon_to_word leaves the path without any convergent
-        // states, meaning that all states have only one ingoing transition
-        let mut curr_state = self.delta_inv[&prev_state].iter().last().unwrap().1;
-
-        self.delete_state(&prev_state);
+        self.finality.remove(&curr_state);
+        self.psi.remove(&curr_state);
 
         loop {
-            if curr_state == self.init_state {
-                break;
-            }
-
-            if self.finality.contains(&curr_state) {
-                self.finality.remove(&curr_state);
-                self.psi.remove(&curr_state);
-                self.canonicalise_from_state(curr_state);
-                break;
-            }
-
             let has_more_transitions = self
                 .delta
                 .get(&curr_state)
                 .is_some_and(|trans| trans.len() > 1);
 
-            if has_more_transitions {
-                self.canonicalise_from_state(curr_state);
+            if curr_state == self.init_state
+                || has_more_transitions
+                || self.finality.contains(&curr_state)
+            {
+                self.canonicalise_min_except();
                 break;
             }
 
             prev_state = curr_state;
+
+            // NOTE: increase_except_from_epsilon_to_word leaves the path without any convergent
+            // states, meaning that all states have only one ingoing transition
             curr_state = self.delta_inv[&curr_state].iter().last().unwrap().1;
 
             self.delete_state(&prev_state);
+            self.min_except.pop();
         }
 
         self.reduce_to_epsilon();
@@ -283,7 +277,7 @@ impl Transducer {
         return Self {
             alphabet,
             states: (0..=n).collect(),
-            finality: HashSet::from([n]),
+            finality: BTreeSet::from([n]),
             init_state: 0,
             delta,
             delta_inv,
@@ -504,7 +498,12 @@ impl Transducer {
         // NOTE: this won't work only for the initial state
         let preds = self.delta_inv.remove(state).unwrap();
         for (ch, q) in preds {
-            self.delta.get_mut(&q).and_then(|trans| trans.remove(&ch));
+            // NOTE: it can't be 0
+            let q_trans_order = self.delta.get(&q).map_or(0, |trans| trans.len());
+            self.trans_order_partitions[q_trans_order].remove(&q);
+            self.trans_order_partitions[q_trans_order - 1].insert(q);
+            remove_from_or_delete(&mut self.lambda, &q, &ch);
+            remove_from_or_delete(&mut self.delta, &q, &ch);
         }
 
         self.delta.remove(state);
@@ -514,12 +513,46 @@ impl Transducer {
         self.psi.remove(state);
     }
 
-    fn clone_state(&self, state: usize) -> usize {
-        todo!();
-    }
+    fn canonicalise_min_except(&mut self) {
+        let t_w = self.state_sequence(&self.min_except);
 
-    fn canonicalise_from_state(&self, state: usize) {
-        todo!();
+        // NOTE: t_w shouldn't be empty
+        let mut i = t_w.len() - 1;
+        let mut curr_state = t_w[i - 1];
+
+        // Find the index at which output can be accumulated the earliest
+        loop {
+            let has_more_transitions = self
+                .delta
+                .get(&curr_state)
+                .is_some_and(|trans| trans.len() > 1);
+
+            if curr_state == self.init_state
+                || self.finality.contains(&curr_state)
+                || has_more_transitions
+            {
+                break;
+            }
+
+            i -= 1;
+            curr_state = t_w[i];
+        }
+
+        let word_output = self.output(&self.min_except);
+        let output = word_output - self.lambda_i(i - 1, word_output);
+
+        self.add_lambda_transition(curr_state, self.min_except[i - 1], output);
+
+        for j in i..t_w.len() {
+            curr_state = t_w[j];
+
+            if self.finality.contains(&curr_state) {
+                self.psi.insert(curr_state, 0);
+            } else {
+                self.add_lambda_transition(curr_state, self.min_except[j], 0);
+            }
+        }
+        // TODO: consider iota update case
     }
 
     fn longest_common_prefix(&self, word: &Vec<char>) -> Vec<char> {
