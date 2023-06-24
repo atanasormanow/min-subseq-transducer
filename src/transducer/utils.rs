@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
     let mut lcp = Vec::new();
@@ -24,28 +24,14 @@ pub fn remove_from_or_delete(map: &mut HashMap<usize, HashMap<char, usize>>, q: 
     }
 }
 
-pub fn vec_copy_take<T>(v: &Vec<T>, i: usize) -> Vec<T>
-where
-    T: Copy,
-{
-    let mut prefix = Vec::new();
-
-    for j in 0..i {
-        prefix.push(v[j]);
+pub fn insert_or_push_in_partition(
+    partitions: &mut Vec<BTreeSet<usize>>,
+    value: usize,
+    index: usize,
+) {
+    if index < partitions.len() {
+        partitions[index].insert(value);
+    } else {
+        partitions.push(BTreeSet::from([value]));
     }
-
-    return prefix;
-}
-
-pub fn vec_copy_drop<T>(v: &Vec<T>, i: usize) -> Vec<T>
-where
-    T: Copy,
-{
-    let mut suffix = Vec::new();
-
-    for j in i..v.len() {
-        suffix.push(v[j]);
-    }
-
-    return suffix;
 }

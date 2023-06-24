@@ -8,6 +8,8 @@ mod tests;
 mod utils;
 use utils::{longest_common_prefix, remove_from_or_delete};
 
+use self::utils::insert_or_push_in_partition;
+
 pub struct Entry {
     pub word: Vec<char>,
     pub output: usize,
@@ -51,6 +53,8 @@ impl Transducer {
             self.reduce_except_by_one();
         }
 
+        let tk = *self.state_sequence(&self.min_except).last().unwrap();
+
         // Add potentially new characters to the alphabet
         for i in k..new_entry.word.len() {
             self.alphabet.insert(new_entry.word[i]);
@@ -63,7 +67,7 @@ impl Transducer {
         self.finality.insert(max_state + new_suffix_len);
 
         // Add a transition from the existing prefix
-        self.add_delta_transition(k, new_entry.word[k], max_state + 1);
+        self.add_delta_transition(tk, new_entry.word[k], max_state + 1);
 
         // Add the transitions for the missing suffix
         for i in 1..new_suffix_len {
@@ -82,12 +86,11 @@ impl Transducer {
             .get(&new_entry_states[k])
             .map_or(0, |trans| trans.len());
         self.trans_order_partitions[tk_trans_order - 1].remove(&new_entry_states[k]);
-        if tk_trans_order == self.trans_order_partitions.len() {
-            let new_partition = BTreeSet::from([new_entry_states[k]]);
-            self.trans_order_partitions.push(new_partition);
-        } else {
-            self.trans_order_partitions[tk_trans_order].insert(new_entry_states[k]);
-        }
+        insert_or_push_in_partition(
+            &mut self.trans_order_partitions,
+            new_entry_states[k],
+            tk_trans_order,
+        );
         self.trans_order_partitions[0].insert(*new_entry_states.last().unwrap());
 
         // Update output transitions
@@ -160,7 +163,13 @@ impl Transducer {
     }
 
     pub fn add_entry_out_of_order(&mut self, word: &str, output: usize) {
-        todo!();
+        let entry = Entry::new(word, output);
+        let word_lcp = self.longest_common_prefix(&entry.word);
+
+        self.increase_except_from_epsilon_to_word(&word_lcp);
+        // NOTE: This shouldn't reduce except as it is already minimal except in word_lcp
+        self.add_entry_in_order(word, output);
+        // self.reduce_to_epsilon();
     }
 
     pub fn remove_entry_with_word(&mut self, word_raw: &str) {
@@ -299,23 +308,15 @@ impl Transducer {
 
         // TODO: do this for every equal state?
         if let Some(q) = self.state_eq(tn, &t_w) {
-            self.states.remove(&tn);
-            self.finality.remove(&tn);
-
-            let state_trans_order = self.delta.get(&tn).map_or(0, |trans| trans.len());
-            self.trans_order_partitions[state_trans_order].remove(&tn);
-
-            // NOTE: tn shouldn't have any transitions in delta_inv
-            self.delta_inv.remove(&tn);
-            self.delta.remove(&tn);
-
+            let prev_output = self.lambda[&tn_prev][&an];
+            self.delete_state(&tn);
             self.add_delta_transition(tn_prev, an, q);
-
-            self.lambda.remove(&tn);
-            self.psi.remove(&tn);
+            self.add_lambda_transition(tn_prev, an, prev_output);
         }
 
         self.min_except.pop();
+        // println!("~ After reducing by one got {:?}", self.min_except);
+        // self.print_with_message("-> Got this transducer")
     }
 
     // NOTE: returns the last and final state that reads the word
@@ -440,10 +441,14 @@ impl Transducer {
     fn add_delta_transition(&mut self, q1: usize, a: char, q2: usize) {
         match self.delta.get_mut(&q1) {
             Some(dq_1) => {
+                self.trans_order_partitions[dq_1.len()].remove(&q1);
                 dq_1.insert(a, q2);
+                insert_or_push_in_partition(&mut self.trans_order_partitions, q1, dq_1.len());
             }
             None => {
                 self.delta.insert(q1, HashMap::from([(a, q2)]));
+                self.trans_order_partitions[0].remove(&q1);
+                self.trans_order_partitions[1].insert(q1);
             }
         }
         match self.delta_inv.get_mut(&q2) {
@@ -495,18 +500,25 @@ impl Transducer {
 
         self.trans_order_partitions[trans_order].remove(state);
 
-        // NOTE: this won't work only for the initial state
-        let preds = self.delta_inv.remove(state).unwrap();
-        for (ch, q) in preds {
-            // NOTE: it can't be 0
-            let q_trans_order = self.delta.get(&q).map_or(0, |trans| trans.len());
-            self.trans_order_partitions[q_trans_order].remove(&q);
-            self.trans_order_partitions[q_trans_order - 1].insert(q);
-            remove_from_or_delete(&mut self.lambda, &q, &ch);
-            remove_from_or_delete(&mut self.delta, &q, &ch);
+        if let Some(preds) = self.delta_inv.remove(state) {
+            for (ch, q) in preds {
+                // NOTE: it can't be 0
+                let q_trans_order = self.delta.get(&q).map_or(0, |trans| trans.len());
+                self.trans_order_partitions[q_trans_order].remove(&q);
+                self.trans_order_partitions[q_trans_order - 1].insert(q);
+                remove_from_or_delete(&mut self.lambda, &q, &ch);
+                remove_from_or_delete(&mut self.delta, &q, &ch);
+            }
         }
 
-        self.delta.remove(state);
+        if let Some(succs) = self.delta.remove(state) {
+            for (ch, q) in succs.iter() {
+                if let Some(trans) = self.delta_inv.get_mut(q) {
+                    trans.remove(&(*ch, *state));
+                }
+            }
+        }
+
         self.lambda.remove(state);
         self.states.remove(state);
         self.finality.remove(state);
