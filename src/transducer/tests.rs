@@ -182,7 +182,7 @@ mod tests {
         let lambda = HashMap::from([
             (0, HashMap::from([('c', 0)])),
             (1, HashMap::from([('b', 0), ('a', 5)])),
-            (2, HashMap::from([('b', 2), ('d', 0)])),
+            (2, HashMap::from([('d', 0)])),
             (4, HashMap::from([('b', 0)])),
             (7, HashMap::from([('a', 0)])),
         ]);
@@ -191,8 +191,8 @@ mod tests {
         let min_except = Vec::new();
         let trans_order_partitions = Vec::from([
             BTreeSet::from([5]),
-            BTreeSet::from([0, 4, 7]),
-            BTreeSet::from([1, 2]),
+            BTreeSet::from([0, 2, 4, 7]),
+            BTreeSet::from([1]),
         ]);
 
         assert_eq!(transducer.alphabet, alphabet);
@@ -238,9 +238,60 @@ mod tests {
 
     #[test]
     fn reduce_except_by_one_char() {
-        let mut transducer = example_transducer();
+        let mut transducer = example_transducer2();
         transducer.reduce_except_by_one();
-        // TODO
+
+        let alphabet = HashSet::from(['a', 'b', 'c', 'd']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4, 5, 7, 8]);
+        let finality = BTreeSet::from([3, 5]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('b', 7), ('a', 2)])),
+            (2, HashMap::from([('b', 3), ('d', 5)])),
+            (3, HashMap::from([('a', 4)])),
+            (4, HashMap::from([('b', 5)])),
+            (7, HashMap::from([('a', 8)])),
+            (8, HashMap::from([('b', 5)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 5)])),
+            (3, HashSet::from([('b', 2)])),
+            (4, HashSet::from([('a', 3)])),
+            (5, HashSet::from([('b', 4), ('d', 2), ('b', 8)])),
+            (7, HashSet::from([('b', 1)])),
+            (8, HashSet::from([('a', 7)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('b', 0), ('a', 5)])),
+            (2, HashMap::from([('b', 2), ('d', 0)])),
+            (3, HashMap::from([('a', 0)])),
+            (4, HashMap::from([('b', 0)])),
+            (7, HashMap::from([('a', 0)])),
+            (8, HashMap::from([('b', 0)])),
+        ]);
+        let iota = 3;
+        let psi = HashMap::from([(3, 5), (5, 0)]);
+        let min_except = vec!['c', 'b', 'a'];
+        let trans_order_partitions = Vec::from([
+            BTreeSet::from([5]),
+            BTreeSet::from([0, 3, 4, 7, 8]),
+            BTreeSet::from([1, 2]),
+        ]);
+
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.trans_order_partitions, trans_order_partitions);
     }
 
     #[test]
@@ -319,6 +370,63 @@ mod tests {
         let trans_order_partitions = Vec::from([
             BTreeSet::from([5]),
             BTreeSet::from([0, 3, 4, 7]),
+            BTreeSet::from([1, 2]),
+        ]);
+
+        return Transducer {
+            alphabet,
+            states,
+            finality,
+            init_state,
+            delta,
+            delta_inv,
+            lambda,
+            iota,
+            psi,
+            min_except,
+            trans_order_partitions,
+        };
+    }
+    fn example_transducer2() -> Transducer {
+        // let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
+        let alphabet = HashSet::from(['a', 'b', 'c', 'd']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4, 5, 7, 8, 9]);
+        let finality = BTreeSet::from([3, 5, 9]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('b', 7), ('a', 2)])),
+            (2, HashMap::from([('b', 3), ('d', 5)])),
+            (3, HashMap::from([('a', 4)])),
+            (4, HashMap::from([('b', 5)])),
+            (7, HashMap::from([('a', 8)])),
+            (8, HashMap::from([('b', 9)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 5)])),
+            (3, HashSet::from([('b', 2)])),
+            (4, HashSet::from([('a', 3)])),
+            (5, HashSet::from([('b', 4), ('d', 2)])),
+            (7, HashSet::from([('b', 1)])),
+            (8, HashSet::from([('a', 7)])),
+            (9, HashSet::from([('b', 8)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('b', 0), ('a', 5)])),
+            (2, HashMap::from([('b', 2), ('d', 0)])),
+            (3, HashMap::from([('a', 0)])),
+            (4, HashMap::from([('b', 0)])),
+            (7, HashMap::from([('a', 0)])),
+            (8, HashMap::from([('b', 0)])),
+        ]);
+        let iota = 3;
+        let psi = HashMap::from([(3, 5), (5, 0), (9, 0)]);
+        let min_except = vec!['c', 'b', 'a', 'b'];
+        let trans_order_partitions = Vec::from([
+            BTreeSet::from([5, 9]),
+            BTreeSet::from([0, 3, 4, 7, 8]),
             BTreeSet::from([1, 2]),
         ]);
 
