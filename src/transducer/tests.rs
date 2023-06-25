@@ -5,7 +5,7 @@ mod tests {
         vec,
     };
 
-    use crate::transducer::{utils::longest_common_prefix, Transducer};
+    use crate::transducer::{utils::{longest_common_prefix, add_to_or_insert}, Transducer};
 
     #[test]
     fn transducer_from_entry() {
@@ -419,13 +419,13 @@ mod tests {
         let mut transducer = Transducer::from_entry("cab", 15);
 
         transducer.add_delta_transition(3, 'a', 4);
-        transducer.add_lambda_transition(3, 'a', 123);
+        add_to_or_insert(&mut transducer.lambda, 3, 'a', 123);
 
         assert_eq!(transducer.delta[&3][&'a'], 4);
         assert_eq!(transducer.lambda[&3][&'a'], 123);
 
         transducer.add_delta_transition(3, 'b', 5);
-        transducer.add_lambda_transition(3, 'b', 321);
+        add_to_or_insert(&mut transducer.lambda, 3, 'b', 321);
 
         assert_eq!(transducer.delta[&3][&'b'], 5);
         assert_eq!(transducer.lambda[&3][&'b'], 321);
