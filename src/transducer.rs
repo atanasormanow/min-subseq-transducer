@@ -10,20 +10,6 @@ use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete};
 
 use self::utils::insert_or_push_in_partition;
 
-pub struct Entry {
-    pub word: Vec<char>,
-    pub output: usize,
-}
-
-impl Entry {
-    pub fn new(word: &str, output: usize) -> Self {
-        Self {
-            word: word.chars().collect(),
-            output,
-        }
-    }
-}
-
 pub struct Transducer {
     alphabet: HashSet<char>,
     states: BTreeSet<usize>,
@@ -40,15 +26,15 @@ pub struct Transducer {
 
 impl Transducer {
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
-        let new_entry = Entry::new(word, output);
-        let k = longest_common_prefix(&self.min_except, &new_entry.word).len();
-        let new_suffix_len = new_entry.word.len() - k;
+        let word = word.chars().collect();
+        let k = longest_common_prefix(&self.min_except, &word).len();
+        let new_suffix_len = word.len() - k;
         let max_state = *self
             .states
             .last()
             .expect("The transducer should have at least 1 state!");
 
-        // Make the transducer min except in (last_entry ^ new_entry)
+        // Make the transducer min except in (last_entry ^
         for _ in 0..(self.min_except.len() - k) {
             self.reduce_except_by_one();
         }
@@ -56,8 +42,8 @@ impl Transducer {
         let tk = *self.state_sequence(&self.min_except).last().unwrap();
 
         // Add potentially new characters to the alphabet
-        for i in k..new_entry.word.len() {
-            self.alphabet.insert(new_entry.word[i]);
+        for i in k..word.len() {
+            self.alphabet.insert(word[i]);
         }
 
         // Add new (final) states and extend alphabet for the missing suffix
@@ -67,42 +53,32 @@ impl Transducer {
         self.finality.insert(max_state + new_suffix_len);
 
         // Add a transition from the existing prefix
-        self.add_delta_transition(tk, new_entry.word[k], max_state + 1);
+        self.add_delta_transition(tk, word[k], max_state + 1);
 
         // Add the transitions for the missing suffix
         for i in 1..new_suffix_len {
-            self.add_delta_transition(max_state + i, new_entry.word[k + i], max_state + i + 1);
+            self.add_delta_transition(max_state + i, word[k + i], max_state + i + 1);
         }
 
-        let new_entry_states = self.state_sequence(&new_entry.word);
+        let states = self.state_sequence(&word);
 
         // Update transition order partitions
-        for i in (k + 1)..(new_entry_states.len() - 1) {
-            self.trans_order_partitions[1].insert(new_entry_states[i]);
+        for i in (k + 1)..(states.len() - 1) {
+            self.trans_order_partitions[1].insert(states[i]);
         }
         // NOTE: this happens after updting delta
-        let tk_trans_order = self
-            .delta
-            .get(&new_entry_states[k])
-            .map_or(0, |trans| trans.len());
-        self.trans_order_partitions[tk_trans_order - 1].remove(&new_entry_states[k]);
-        insert_or_push_in_partition(
-            &mut self.trans_order_partitions,
-            new_entry_states[k],
-            tk_trans_order,
-        );
-        self.trans_order_partitions[0].insert(*new_entry_states.last().unwrap());
+        let tk_trans_order = self.delta.get(&states[k]).map_or(0, |trans| trans.len());
+        self.trans_order_partitions[tk_trans_order - 1].remove(&states[k]);
+        insert_or_push_in_partition(&mut self.trans_order_partitions, states[k], tk_trans_order);
+        self.trans_order_partitions[0].insert(*states.last().unwrap());
 
         for i in 1..=k {
-            if self.finality.contains(&new_entry_states[i]) {
-                let final_output =
-                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, new_entry.output);
-                self.psi.insert(new_entry_states[i], final_output);
+            if self.finality.contains(&states[i]) {
+                let final_output = self.output(&word[..i].to_vec()) - self.lambda_i(i, output);
+                self.psi.insert(states[i], final_output);
             }
         }
-        new_entry_states
-            .last()
-            .and_then(|tm| self.psi.insert(*tm, 0));
+        states.last().and_then(|tm| self.psi.insert(*tm, 0));
 
         // Update output transitions
         //
@@ -110,43 +86,38 @@ impl Transducer {
         // This means that the updates have to be done simultaneously.
         let mut postponed_lambda_updates: Vec<(usize, char, usize)> = Vec::new();
         for i in 1..=k {
-            let curr_output = self.lambda_i(i, new_entry.output);
-            let prev_output = self.lambda_i(i - 1, new_entry.output);
+            let curr_output = self.lambda_i(i, output);
+            let prev_output = self.lambda_i(i - 1, output);
             postponed_lambda_updates.push((
-                new_entry_states[i - 1],
+                states[i - 1],
                 self.min_except[i - 1],
                 curr_output - prev_output,
             ));
         }
 
-        let lambda_k = self.lambda_i(k, new_entry.output);
-        add_to_or_insert(
-            &mut self.lambda,
-            new_entry_states[k],
-            new_entry.word[k],
-            new_entry.output - lambda_k,
-        );
+        let lambda_k = self.lambda_i(k, output);
+        add_to_or_insert(&mut self.lambda, states[k], word[k], output - lambda_k);
 
         for i in 1..new_suffix_len {
-            add_to_or_insert(&mut self.lambda, max_state + i, new_entry.word[k + i], 0);
+            add_to_or_insert(&mut self.lambda, max_state + i, word[k + i], 0);
         }
 
         for i in 0..=k {
             for ch in self.alphabet.iter() {
                 let is_lambda_defined = self
                     .lambda
-                    .get(&new_entry_states[i])
+                    .get(&states[i])
                     .and_then(|trans| trans.get(ch))
                     .is_some();
 
-                if *ch != new_entry.word[i] && is_lambda_defined {
-                    let mut prefix_with_ch = new_entry.word[0..i].to_vec();
+                if *ch != word[i] && is_lambda_defined {
+                    let mut prefix_with_ch = word[0..i].to_vec();
                     prefix_with_ch.push(*ch);
 
-                    let output = self.iota + self.lambda_star(&prefix_with_ch)
-                        - self.lambda_i(i, new_entry.output);
+                    let output =
+                        self.iota + self.lambda_star(&prefix_with_ch) - self.lambda_i(i, output);
 
-                    postponed_lambda_updates.push((new_entry_states[i], *ch, output));
+                    postponed_lambda_updates.push((states[i], *ch, output));
                 }
             }
         }
@@ -156,15 +127,15 @@ impl Transducer {
         }
 
         // Update iota last, as lambda and psi use the old value
-        self.iota = min(self.iota, new_entry.output);
+        self.iota = min(self.iota, output);
 
         // The resulting Transducer is minimal except in the new_entry
-        self.min_except = new_entry.word;
+        self.min_except = word;
     }
 
     pub fn add_entry_out_of_order(&mut self, word: &str, output: usize) {
-        let entry = Entry::new(word, output);
-        let word_lcp = self.longest_common_prefix(&entry.word);
+        let word_vec = word.chars().collect();
+        let word_lcp = self.longest_common_prefix(&word_vec);
 
         self.increase_except_from_epsilon_to_word(&word_lcp);
         // NOTE: This shouldn't reduce except as it is already minimal except in word_lcp
@@ -263,8 +234,8 @@ impl Transducer {
     // Private functions:
     //////////////////////
     fn from_entry(word: &str, output: usize) -> Self {
-        let entry = Entry::new(word, output);
-        let n = entry.word.len();
+        let word: Vec<char> = word.chars().collect();
+        let n = word.len();
 
         let mut alphabet = HashSet::new();
         let mut delta = HashMap::new();
@@ -272,14 +243,14 @@ impl Transducer {
         let mut lambda = HashMap::new();
 
         for i in 0..n {
-            alphabet.insert(entry.word[i]);
+            alphabet.insert(word[i]);
 
-            let state_transition = HashMap::from([(entry.word[i], i + 1)]);
+            let state_transition = HashMap::from([(word[i], i + 1)]);
             delta.insert(i, state_transition);
 
-            delta_inv.insert(i + 1, HashSet::from([(entry.word[i], i)]));
+            delta_inv.insert(i + 1, HashSet::from([(word[i], i)]));
 
-            let state_output = HashMap::from([(entry.word[i], 0)]);
+            let state_output = HashMap::from([(word[i], 0)]);
             lambda.insert(i, state_output);
         }
 
@@ -291,9 +262,9 @@ impl Transducer {
             delta,
             delta_inv,
             lambda,
-            iota: entry.output,
+            iota: output,
             psi: HashMap::from([(n, 0)]),
-            min_except: entry.word,
+            min_except: word,
             trans_order_partitions: vec![BTreeSet::from([n]), (0..n).collect()],
         };
     }
@@ -318,7 +289,7 @@ impl Transducer {
     }
 
     // NOTE: returns the last and final state that reads the word
-    pub fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) -> usize {
+    fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) -> usize {
         if !self.min_except.is_empty() {
             panic!("Transduser must be minimal except in epsilon!");
         }
