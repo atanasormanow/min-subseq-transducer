@@ -58,9 +58,29 @@ mod tests {
         );
     }
 
+    // TODO!
     #[test]
-    fn delete_middle_word() {
-        let transducer = example_transducer();
+    fn remove_middle_word() {
+        let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
+        let mut transducer = Transducer::from_dictionary(dictionary);
+        transducer.add_entry_out_of_order("ca", 9);
+
+        let expected_transducer = example_transducer();
+
+        assert_eq!(transducer.alphabet, expected_transducer.alphabet);
+        assert_eq!(transducer.states, expected_transducer.states);
+        assert_eq!(transducer.finality, BTreeSet::from([1, 3, 5]));
+        assert_eq!(transducer.init_state, expected_transducer.init_state);
+        assert_eq!(transducer.delta, expected_transducer.delta);
+        assert_eq!(transducer.delta_inv, expected_transducer.delta_inv);
+        assert_eq!(transducer.lambda, expected_transducer.lambda);
+        assert_eq!(transducer.iota, expected_transducer.iota);
+        assert_eq!(transducer.psi, HashMap::from([(1, 1), (3, 5), (5, 0)]));
+        assert_eq!(transducer.min_except, expected_transducer.min_except);
+        assert_eq!(
+            transducer.trans_order_partitions,
+            expected_transducer.trans_order_partitions
+        );
     }
 
     #[test]
@@ -189,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn add_word_out_of_order() {
+    fn add_entry_out_of_order2() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
         transducer.add_entry_out_of_order("cabada", 6);
@@ -309,9 +329,109 @@ mod tests {
     fn add_entry_in_order() {
         let mut transducer = Transducer::from_entry("cab", 15);
         transducer.add_entry_in_order("cabab", 10);
+        transducer.reduce_to_epsilon();
 
-        println!("-> transducer for {{ cab -> 15 , cabab -> 10}}");
-        transducer.print();
+        let alphabet = HashSet::from(['a', 'b', 'c']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4, 5]);
+        let finality = BTreeSet::from([3, 5]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('a', 2)])),
+            (2, HashMap::from([('b', 3)])),
+            (3, HashMap::from([('a', 4)])),
+            (4, HashMap::from([('b', 5)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 1)])),
+            (3, HashSet::from([('b', 2)])),
+            (4, HashSet::from([('a', 3)])),
+            (5, HashSet::from([('b', 4)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('a', 0)])),
+            (2, HashMap::from([('b', 0)])),
+            (3, HashMap::from([('a', 0)])),
+            (4, HashMap::from([('b', 0)])),
+        ]);
+        let iota = 10;
+        let psi = HashMap::from([(3, 5), (5, 0)]);
+        let min_except = Vec::new();
+        let trans_order_partitions =
+            Vec::from([BTreeSet::from([5]), BTreeSet::from([0, 1, 2, 3, 4])]);
+
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.trans_order_partitions, trans_order_partitions);
+    }
+
+
+    // TODO!
+    #[test]
+    fn increase_min_except() {
+        let mut transducer = Transducer::from_entry("cabab", 10);
+        transducer.reduce_to_epsilon();
+        transducer.increase_except_from_epsilon_to_word(&vec!['c', 'a', 'b']);
+    }
+
+    // TODO!
+    #[test]
+    fn add_entry_out_of_order() {
+        let mut transducer = Transducer::from_entry("cabab", 10);
+        transducer.add_entry_out_of_order("cab", 15);
+
+        let alphabet = HashSet::from(['a', 'b', 'c']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4, 5]);
+        let finality = BTreeSet::from([3, 5]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('a', 2)])),
+            (2, HashMap::from([('b', 3)])),
+            (3, HashMap::from([('a', 4)])),
+            (4, HashMap::from([('b', 5)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 1)])),
+            (3, HashSet::from([('b', 2)])),
+            (4, HashSet::from([('a', 3)])),
+            (5, HashSet::from([('b', 4)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('a', 0)])),
+            (2, HashMap::from([('b', 0)])),
+            (3, HashMap::from([('a', 0)])),
+            (4, HashMap::from([('b', 0)])),
+        ]);
+        let iota = 10;
+        let psi = HashMap::from([(3, 5), (5, 0)]);
+        let min_except = Vec::new();
+        let trans_order_partitions =
+            Vec::from([BTreeSet::from([5]), BTreeSet::from([0, 1, 2, 3, 4])]);
+
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.trans_order_partitions, trans_order_partitions);
     }
 
     #[test]
