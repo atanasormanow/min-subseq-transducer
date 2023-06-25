@@ -93,6 +93,17 @@ impl Transducer {
         );
         self.trans_order_partitions[0].insert(*new_entry_states.last().unwrap());
 
+        for i in 1..=k {
+            if self.finality.contains(&new_entry_states[i]) {
+                let final_output =
+                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, new_entry.output);
+                self.psi.insert(new_entry_states[i], final_output);
+            }
+        }
+        new_entry_states
+            .last()
+            .and_then(|tm| self.psi.insert(*tm, 0));
+
         // Update output transitions
         //
         // NOTE: the first and last updates of lambda both depend on the old lambda.
@@ -143,17 +154,6 @@ impl Transducer {
         for (q, a, o) in postponed_lambda_updates {
             add_to_or_insert(&mut self.lambda, q, a, o);
         }
-
-        for i in 1..=k {
-            if self.finality.contains(&new_entry_states[i]) {
-                let final_output =
-                    self.output(&new_entry.word[..i].to_vec()) - self.lambda_i(i, new_entry.output);
-                self.psi.insert(new_entry_states[i], final_output);
-            }
-        }
-        new_entry_states
-            .last()
-            .and_then(|tm| self.psi.insert(*tm, 0));
 
         // Update iota last, as lambda and psi use the old value
         self.iota = min(self.iota, new_entry.output);
