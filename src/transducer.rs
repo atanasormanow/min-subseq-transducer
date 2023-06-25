@@ -169,7 +169,7 @@ impl Transducer {
         self.increase_except_from_epsilon_to_word(&word_lcp);
         // NOTE: This shouldn't reduce except as it is already minimal except in word_lcp
         self.add_entry_in_order(word, output);
-        // self.reduce_to_epsilon();
+        self.reduce_to_epsilon();
     }
 
     pub fn remove_entry_with_word(&mut self, word_raw: &str) {

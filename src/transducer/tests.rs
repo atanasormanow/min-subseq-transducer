@@ -1,4 +1,8 @@
 #[cfg(test)]
+
+// TODO: add a test for deleting a short word
+// TODO: add a test for a bigger dictionary
+// TODO: read dictionary from a file
 mod tests {
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -213,15 +217,14 @@ mod tests {
     fn add_word_out_of_order() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
-        // NOTE: at present it doesn't reduce to epsilon
         transducer.add_entry_out_of_order("cabada", 6);
 
         assert_eq!(transducer.alphabet, HashSet::from(['a', 'b', 'c', 'd']));
         assert_eq!(
             transducer.states,
-            BTreeSet::from([0, 1, 2, 3, 4, 5, 7, 8, 9, 10])
+            BTreeSet::from([0, 1, 2, 3, 4, 5, 7, 8, 9])
         );
-        assert_eq!(transducer.finality, BTreeSet::from([3, 5, 10]));
+        assert_eq!(transducer.finality, BTreeSet::from([3, 5]));
         assert_eq!(transducer.init_state, 0);
         assert_eq!(
             transducer.delta,
@@ -233,7 +236,7 @@ mod tests {
                 (4, HashMap::from([('b', 5)])),
                 (7, HashMap::from([('a', 4)])),
                 (8, HashMap::from([('b', 5), ('d', 9)])),
-                (9, HashMap::from([('a', 10)])),
+                (9, HashMap::from([('a', 5)])),
             ])
         );
         assert_eq!(
@@ -243,11 +246,10 @@ mod tests {
                 (2, HashSet::from([('a', 1)])),
                 (3, HashSet::from([('b', 2)])),
                 (4, HashSet::from([('a', 7)])),
-                (5, HashSet::from([('b', 4), ('d', 2), ('b', 8)])),
+                (5, HashSet::from([('b', 4), ('d', 2), ('b', 8), ('a', 9)])),
                 (7, HashSet::from([('b', 1)])),
                 (8, HashSet::from([('a', 3)])),
                 (9, HashSet::from([('d', 8)])),
-                (10, HashSet::from([('a', 9)])),
             ])
         );
         assert_eq!(
@@ -264,12 +266,12 @@ mod tests {
             ])
         );
         assert_eq!(transducer.iota, 3);
-        assert_eq!(transducer.psi, HashMap::from([(3, 9), (5, 0), (10, 0)]));
-        assert_eq!(transducer.min_except, vec!['c', 'a', 'b', 'a', 'd', 'a']);
+        assert_eq!(transducer.psi, HashMap::from([(3, 9), (5, 0)]));
+        assert_eq!(transducer.min_except, Vec::new());
         assert_eq!(
             transducer.trans_order_partitions,
             Vec::from([
-                BTreeSet::from([5, 10]),
+                BTreeSet::from([5]),
                 BTreeSet::from([0, 3, 4, 7, 9]),
                 BTreeSet::from([1, 2, 8]),
             ])
