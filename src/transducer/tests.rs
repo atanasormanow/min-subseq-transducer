@@ -375,13 +375,54 @@ mod tests {
         assert_eq!(transducer.trans_order_partitions, trans_order_partitions);
     }
 
-
-    // TODO!
     #[test]
     fn increase_min_except() {
         let mut transducer = Transducer::from_entry("cabab", 10);
         transducer.reduce_to_epsilon();
         transducer.increase_except_from_epsilon_to_word(&vec!['c', 'a', 'b']);
+
+        let alphabet = HashSet::from(['a', 'b', 'c']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4, 5]);
+        let finality = BTreeSet::from([5]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('a', 2)])),
+            (2, HashMap::from([('b', 3)])),
+            (3, HashMap::from([('a', 4)])),
+            (4, HashMap::from([('b', 5)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 1)])),
+            (3, HashSet::from([('b', 2)])),
+            (4, HashSet::from([('a', 3)])),
+            (5, HashSet::from([('b', 4)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('a', 0)])),
+            (2, HashMap::from([('b', 0)])),
+            (3, HashMap::from([('a', 0)])),
+            (4, HashMap::from([('b', 0)])),
+        ]);
+        let iota = 10;
+        let psi = HashMap::from([(5, 0)]);
+        let min_except = vec!['c', 'a', 'b'];
+        let trans_order_partitions =
+            Vec::from([BTreeSet::from([5]), BTreeSet::from([0, 1, 2, 3, 4])]);
+
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.trans_order_partitions, trans_order_partitions);
     }
 
     // TODO!
