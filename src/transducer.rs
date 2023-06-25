@@ -6,7 +6,7 @@ use std::{
 
 mod tests;
 mod utils;
-use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete};
+use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete, insert_or_push_in_partition};
 
 pub struct Transducer {
     alphabet: HashSet<char>,
