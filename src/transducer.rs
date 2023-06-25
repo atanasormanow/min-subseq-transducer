@@ -94,15 +94,18 @@ impl Transducer {
         self.trans_order_partitions[0].insert(*new_entry_states.last().unwrap());
 
         // Update output transitions
+        //
+        // NOTE: the first and last updates of lambda both depend on the old lambda.
+        // This means that the updates have to be done simultaneously.
+        let mut postponed_lambda_updates: Vec<(usize, char, usize)> = Vec::new();
         for i in 1..=k {
             let curr_output = self.lambda_i(i, new_entry.output);
             let prev_output = self.lambda_i(i - 1, new_entry.output);
-            add_to_or_insert(
-                &mut self.lambda,
+            postponed_lambda_updates.push((
                 new_entry_states[i - 1],
                 self.min_except[i - 1],
                 curr_output - prev_output,
-            );
+            ));
         }
 
         let lambda_k = self.lambda_i(k, new_entry.output);
@@ -117,7 +120,6 @@ impl Transducer {
             add_to_or_insert(&mut self.lambda, max_state + i, new_entry.word[k + i], 0);
         }
 
-        // TODO! cannot update by all sets in consecutive order
         for i in 0..=k {
             for ch in self.alphabet.iter() {
                 let is_lambda_defined = self
@@ -133,9 +135,13 @@ impl Transducer {
                     let output = self.iota + self.lambda_star(&prefix_with_ch)
                         - self.lambda_i(i, new_entry.output);
 
-                    add_to_or_insert(&mut self.lambda, new_entry_states[i], *ch, output);
+                    postponed_lambda_updates.push((new_entry_states[i], *ch, output));
                 }
             }
+        }
+
+        for (q, a, o) in postponed_lambda_updates {
+            add_to_or_insert(&mut self.lambda, q, a, o);
         }
 
         for i in 1..=k {
