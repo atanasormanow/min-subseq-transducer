@@ -6,7 +6,7 @@ use std::{
 
 mod tests;
 mod utils;
-use utils::{longest_common_prefix, remove_from_or_delete};
+use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete};
 
 use self::utils::insert_or_push_in_partition;
 
@@ -97,23 +97,27 @@ impl Transducer {
         for i in 1..=k {
             let curr_output = self.lambda_i(i, new_entry.output);
             let prev_output = self.lambda_i(i - 1, new_entry.output);
-            self.add_lambda_transition(
+            add_to_or_insert(
+                &mut self.lambda,
                 new_entry_states[i - 1],
                 self.min_except[i - 1],
                 curr_output - prev_output,
             );
         }
 
-        self.add_lambda_transition(
+        let lambda_k = self.lambda_i(k, new_entry.output);
+        add_to_or_insert(
+            &mut self.lambda,
             new_entry_states[k],
             new_entry.word[k],
-            new_entry.output - self.lambda_i(k, new_entry.output),
+            new_entry.output - lambda_k,
         );
 
         for i in 1..new_suffix_len {
-            self.add_lambda_transition(max_state + i, new_entry.word[k + i], 0);
+            add_to_or_insert(&mut self.lambda, max_state + i, new_entry.word[k + i], 0);
         }
 
+        // TODO! cannot update by all sets in consecutive order
         for i in 0..=k {
             for ch in self.alphabet.iter() {
                 let is_lambda_defined = self
@@ -123,23 +127,13 @@ impl Transducer {
                     .is_some();
 
                 if *ch != new_entry.word[i] && is_lambda_defined {
-                    // TODO: this seems like it would be slow
-                    let mut ai_ch = new_entry.word[0..i].to_vec();
-                    ai_ch.push(*ch);
-                    let output =
-                        self.iota + self.lambda_star(&ai_ch) - self.lambda_i(i, new_entry.output);
+                    let mut prefix_with_ch = new_entry.word[0..i].to_vec();
+                    prefix_with_ch.push(*ch);
 
-                    // NOTE: this is the inlined code of add_lambda_transition
-                    // to avoid borrowing self as mutable and immutable at the same time
-                    match self.lambda.get_mut(&new_entry_states[i]) {
-                        Some(dq1) => {
-                            dq1.insert(*ch, output);
-                        }
-                        None => {
-                            let q1_trans = HashMap::from([(*ch, output)]);
-                            self.lambda.insert(new_entry_states[i], q1_trans);
-                        }
-                    }
+                    let output = self.iota + self.lambda_star(&prefix_with_ch)
+                        - self.lambda_i(i, new_entry.output);
+
+                    add_to_or_insert(&mut self.lambda, new_entry_states[i], *ch, output);
                 }
             }
         }
@@ -311,7 +305,7 @@ impl Transducer {
             let prev_output = self.lambda[&tn_prev][&an];
             self.delete_state(&tn);
             self.add_delta_transition(tn_prev, an, q);
-            self.add_lambda_transition(tn_prev, an, prev_output);
+            add_to_or_insert(&mut self.lambda, tn_prev, an, prev_output);
         }
 
         self.min_except.pop();
@@ -459,18 +453,6 @@ impl Transducer {
         }
     }
 
-    fn add_lambda_transition(&mut self, q1: usize, a: char, m: usize) {
-        match self.lambda.get_mut(&q1) {
-            Some(d_q1) => {
-                d_q1.insert(a, m);
-            }
-            None => {
-                let q1_trans = HashMap::from([(a, m)]);
-                self.lambda.insert(q1, q1_trans);
-            }
-        }
-    }
-
     // NOTE: make sure using min_except is enough
     fn lambda_i(&self, i: usize, beta: usize) -> usize {
         let word_prefix_i = &self.min_except[..i].to_vec();
@@ -551,7 +533,7 @@ impl Transducer {
         let word_output = self.output(&self.min_except);
         let output = word_output - self.lambda_i(i - 1, word_output);
 
-        self.add_lambda_transition(curr_state, self.min_except[i - 1], output);
+        add_to_or_insert(&mut self.lambda, curr_state, self.min_except[i - 1], output);
 
         for j in i..t_w.len() {
             curr_state = t_w[j];
@@ -559,7 +541,7 @@ impl Transducer {
             if self.finality.contains(&curr_state) {
                 self.psi.insert(curr_state, 0);
             } else {
-                self.add_lambda_transition(curr_state, self.min_except[j], 0);
+                add_to_or_insert(&mut self.lambda, curr_state, self.min_except[j], 0);
             }
         }
         // TODO: consider iota update case
