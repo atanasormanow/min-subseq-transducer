@@ -418,11 +418,7 @@ impl Transducer {
             Some(dq_1) => {
                 self.trans_order_partitions[dq_1.len()].remove(&q1);
                 dq_1.insert(a, q2);
-                utils::insert_or_push_in_partition(
-                    &mut self.trans_order_partitions,
-                    q1,
-                    dq_1.len(),
-                );
+                insert_or_push_in_partition(&mut self.trans_order_partitions, q1, dq_1.len());
             }
             None => {
                 self.delta.insert(q1, HashMap::from([(a, q2)]));
