@@ -1,5 +1,5 @@
 use std::{
-    cmp::min,
+    cmp::{max, min},
     collections::{BTreeSet, HashMap, HashSet},
     panic,
 };
@@ -30,10 +30,8 @@ impl Transducer {
         let n = word.len();
         let k = longest_common_prefix(&self.min_except, &word).len();
 
-        let prev_min = self.min_except.len();
         self.reduce_except_by_k(self.min_except.len() - k);
 
-        let max_state = *self.states.last().unwrap_or(&0);
         let tk = *self.state_sequence(&self.min_except).last().unwrap_or(&0);
 
         self.update_alphabet_with_word(&word[k..n]);
@@ -60,18 +58,9 @@ impl Transducer {
             self.trans_order_partitions[1].insert(word_states[i]);
         }
 
-        // NOTE: this must happen after updting delta
-        let tk_trans_order = self
-            .delta
-            .get(&word_states[k])
-            .map_or(0, |trans| trans.len());
-        self.trans_order_partitions[tk_trans_order - 1].remove(&word_states[k]);
-        insert_or_push_in_partition(
-            &mut self.trans_order_partitions,
-            word_states[k],
-            tk_trans_order,
-        );
-        self.trans_order_partitions[0].insert(*word_states.last().unwrap());
+        if n - k > 0 {
+            self.trans_order_partitions[0].insert(*word_states.last().unwrap());
+        }
 
         for i in 1..=k {
             if self.finality.contains(&word_states[i]) {
@@ -113,7 +102,7 @@ impl Transducer {
                     .and_then(|trans| trans.get(ch))
                     .is_some();
 
-                if *ch != word[i] && is_lambda_defined {
+                if i < word.len() && *ch != word[i] && is_lambda_defined {
                     let mut prefix_with_ch = word[0..i].to_vec();
                     prefix_with_ch.push(*ch);
 
@@ -128,6 +117,13 @@ impl Transducer {
         for (q, a, o) in postponed_lambda_updates {
             add_to_or_insert(&mut self.lambda, q, a, o);
         }
+
+        // NOTE: this is a bit sketchy case.
+        // Im trying to add a prefix of a word in the transducer
+        let tn_output = max(output, self.output(&word)) - self.output(&word);
+        word_states
+            .last()
+            .and_then(|tm| self.psi.insert(*tm, tn_output));
 
         // Update iota last, as lambda and psi use the old value
         self.iota = min(self.iota, output);
