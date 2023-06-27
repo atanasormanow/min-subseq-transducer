@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(transducer.alphabet, HashSet::from(['a', 'b', 'c', 'd']));
         assert_eq!(
             transducer.states,
-            BTreeSet::from([0, 1, 2, 3, 4, 5, 7, 8, 9])
+            BTreeSet::from([0, 1, 2, 3, 4, 5, 6, 7, 8])
         );
         assert_eq!(transducer.finality, BTreeSet::from([3, 5]));
         assert_eq!(transducer.init_state, 0);
@@ -224,13 +224,13 @@ mod tests {
             transducer.delta,
             HashMap::from([
                 (0, HashMap::from([('c', 1)])),
-                (1, HashMap::from([('b', 7), ('a', 2)])),
+                (1, HashMap::from([('b', 6), ('a', 2)])),
                 (2, HashMap::from([('b', 3), ('d', 5)])),
-                (3, HashMap::from([('a', 8)])),
+                (3, HashMap::from([('a', 7)])),
                 (4, HashMap::from([('b', 5)])),
-                (7, HashMap::from([('a', 4)])),
-                (8, HashMap::from([('b', 5), ('d', 9)])),
-                (9, HashMap::from([('a', 5)])),
+                (6, HashMap::from([('a', 4)])),
+                (7, HashMap::from([('b', 5), ('d', 8)])),
+                (8, HashMap::from([('a', 5)])),
             ])
         );
         assert_eq!(
@@ -239,11 +239,11 @@ mod tests {
                 (1, HashSet::from([('c', 0)])),
                 (2, HashSet::from([('a', 1)])),
                 (3, HashSet::from([('b', 2)])),
-                (4, HashSet::from([('a', 7)])),
-                (5, HashSet::from([('b', 4), ('d', 2), ('b', 8), ('a', 9)])),
-                (7, HashSet::from([('b', 1)])),
-                (8, HashSet::from([('a', 3)])),
-                (9, HashSet::from([('d', 8)])),
+                (4, HashSet::from([('a', 6)])),
+                (5, HashSet::from([('b', 4), ('d', 2), ('b', 7), ('a', 8)])),
+                (6, HashSet::from([('b', 1)])),
+                (7, HashSet::from([('a', 3)])),
+                (8, HashSet::from([('d', 7)])),
             ])
         );
         assert_eq!(
@@ -254,9 +254,9 @@ mod tests {
                 (2, HashMap::from([('b', 0), ('d', 2)])),
                 (3, HashMap::from([('a', 0)])),
                 (4, HashMap::from([('b', 0)])),
-                (7, HashMap::from([('a', 0)])),
-                (8, HashMap::from([('b', 4), ('d', 0)])),
-                (9, HashMap::from([('a', 0)])),
+                (6, HashMap::from([('a', 0)])),
+                (7, HashMap::from([('b', 4), ('d', 0)])),
+                (8, HashMap::from([('a', 0)])),
             ])
         );
         assert_eq!(transducer.iota, 3);
@@ -266,8 +266,8 @@ mod tests {
             transducer.trans_order_partitions,
             Vec::from([
                 BTreeSet::from([5]),
-                BTreeSet::from([0, 3, 4, 7, 9]),
-                BTreeSet::from([1, 2, 8]),
+                BTreeSet::from([0, 3, 4, 6, 8]),
+                BTreeSet::from([1, 2, 7]),
             ])
         );
     }
