@@ -59,7 +59,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_middle_word() {
+    fn add_small_entry_out_of_order() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
         transducer.add_entry_out_of_order("ca", 9);
@@ -68,13 +68,13 @@ mod tests {
 
         assert_eq!(transducer.alphabet, expected_transducer.alphabet);
         assert_eq!(transducer.states, expected_transducer.states);
-        assert_eq!(transducer.finality, BTreeSet::from([1, 3, 5]));
+        assert_eq!(transducer.finality, BTreeSet::from([2, 3, 5]));
         assert_eq!(transducer.init_state, expected_transducer.init_state);
         assert_eq!(transducer.delta, expected_transducer.delta);
         assert_eq!(transducer.delta_inv, expected_transducer.delta_inv);
         assert_eq!(transducer.lambda, expected_transducer.lambda);
         assert_eq!(transducer.iota, expected_transducer.iota);
-        assert_eq!(transducer.psi, HashMap::from([(1, 1), (3, 5), (5, 0)]));
+        assert_eq!(transducer.psi, HashMap::from([(2, 1), (3, 5), (5, 0)]));
         assert_eq!(transducer.min_except, expected_transducer.min_except);
         assert_eq!(
             transducer.trans_order_partitions,
@@ -89,17 +89,17 @@ mod tests {
         transducer.remove_entry_with_word("cabab");
 
         assert_eq!(transducer.alphabet, HashSet::from(['a', 'b', 'c', 'd']));
-        assert_eq!(transducer.states, BTreeSet::from([0, 1, 2, 4, 5, 7]));
+        assert_eq!(transducer.states, BTreeSet::from([0, 1, 2, 4, 5, 6]));
         assert_eq!(transducer.finality, BTreeSet::from([5]));
         assert_eq!(transducer.init_state, 0);
         assert_eq!(
             transducer.delta,
             HashMap::from([
                 (0, HashMap::from([('c', 1)])),
-                (1, HashMap::from([('b', 7), ('a', 2)])),
+                (1, HashMap::from([('b', 6), ('a', 2)])),
                 (2, HashMap::from([('b', 5), ('d', 5)])),
                 (4, HashMap::from([('b', 5)])),
-                (7, HashMap::from([('a', 4)])),
+                (6, HashMap::from([('a', 4)])),
             ])
         );
         assert_eq!(
@@ -107,9 +107,9 @@ mod tests {
             HashMap::from([
                 (1, HashSet::from([('c', 0)])),
                 (2, HashSet::from([('a', 1)])),
-                (4, HashSet::from([('a', 7)])),
+                (4, HashSet::from([('a', 6)])),
                 (5, HashSet::from([('b', 4), ('d', 2), ('b', 2)])),
-                (7, HashSet::from([('b', 1)])),
+                (6, HashSet::from([('b', 1)])),
             ])
         );
         assert_eq!(
@@ -119,7 +119,7 @@ mod tests {
                 (1, HashMap::from([('b', 0), ('a', 5)])),
                 (2, HashMap::from([('b', 7), ('d', 0)])),
                 (4, HashMap::from([('b', 0)])),
-                (7, HashMap::from([('a', 0)])),
+                (6, HashMap::from([('a', 0)])),
             ])
         );
         assert_eq!(transducer.iota, 3);
@@ -129,7 +129,7 @@ mod tests {
             transducer.trans_order_partitions,
             Vec::from([
                 BTreeSet::from([5]),
-                BTreeSet::from([0, 4, 7]),
+                BTreeSet::from([0, 4, 6]),
                 BTreeSet::from([1, 2]),
             ])
         );
@@ -207,7 +207,7 @@ mod tests {
         );
     }
 
-    // #[test]
+    #[test]
     fn add_entry_out_of_order2() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
