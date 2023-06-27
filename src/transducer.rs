@@ -6,7 +6,9 @@ use std::{
 
 mod tests;
 mod utils;
-use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete, insert_or_push_in_partition};
+use utils::{
+    add_to_or_insert, insert_or_push_in_partition, longest_common_prefix, remove_from_or_delete,
+};
 
 pub struct Transducer {
     alphabet: HashSet<char>,
@@ -24,59 +26,60 @@ pub struct Transducer {
 
 impl Transducer {
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
-        let word = word.chars().collect();
+        let word: Vec<char> = word.chars().collect();
+        let n = word.len();
         let k = longest_common_prefix(&self.min_except, &word).len();
-        let new_suffix_len = word.len() - k;
-        let max_state = *self
-            .states
-            .last()
-            .expect("The transducer should have at least 1 state!");
 
-        // Make the transducer min except in (last_entry ^
-        for _ in 0..(self.min_except.len() - k) {
-            self.reduce_except_by_one();
-        }
+        let prev_min = self.min_except.len();
+        self.reduce_except_by_k(self.min_except.len() - k);
 
-        let tk = *self.state_sequence(&self.min_except).last().unwrap();
+        let max_state = *self.states.last().unwrap_or(&0);
+        let tk = *self.state_sequence(&self.min_except).last().unwrap_or(&0);
 
-        // Add potentially new characters to the alphabet
-        for i in k..word.len() {
-            self.alphabet.insert(word[i]);
-        }
+        self.update_alphabet_with_word(&word[k..n]);
 
-        // Add new (final) states and extend alphabet for the missing suffix
-        for i in 1..=new_suffix_len {
-            self.states.insert(max_state + i);
-        }
-        self.finality.insert(max_state + new_suffix_len);
-
-        // Add a transition from the existing prefix
-        self.add_delta_transition(tk, word[k], max_state + 1);
+        let tkn = self.add_new_states(n - k);
 
         // Add the transitions for the missing suffix
-        for i in 1..new_suffix_len {
-            self.add_delta_transition(max_state + i, word[k + i], max_state + i + 1);
+        for i in 1..(n - k) {
+            self.add_delta_transition(tkn[i - 1], word[k + i], tkn[i]);
         }
 
-        let states = self.state_sequence(&word);
+        // Make the last state of word final
+        self.finality.insert(*tkn.last().unwrap_or(&tk));
+
+        // Add a transition from the existing prefix
+        if n - k > 0 {
+            self.add_delta_transition(tk, word[k], tkn[0]);
+        }
+
+        let word_states = self.state_sequence(&word);
 
         // Update transition order partitions
-        for i in (k + 1)..(states.len() - 1) {
-            self.trans_order_partitions[1].insert(states[i]);
+        for i in (k + 1)..(word_states.len() - 1) {
+            self.trans_order_partitions[1].insert(word_states[i]);
         }
-        // NOTE: this happens after updting delta
-        let tk_trans_order = self.delta.get(&states[k]).map_or(0, |trans| trans.len());
-        self.trans_order_partitions[tk_trans_order - 1].remove(&states[k]);
-        insert_or_push_in_partition(&mut self.trans_order_partitions, states[k], tk_trans_order);
-        self.trans_order_partitions[0].insert(*states.last().unwrap());
+
+        // NOTE: this must happen after updting delta
+        let tk_trans_order = self
+            .delta
+            .get(&word_states[k])
+            .map_or(0, |trans| trans.len());
+        self.trans_order_partitions[tk_trans_order - 1].remove(&word_states[k]);
+        insert_or_push_in_partition(
+            &mut self.trans_order_partitions,
+            word_states[k],
+            tk_trans_order,
+        );
+        self.trans_order_partitions[0].insert(*word_states.last().unwrap());
 
         for i in 1..=k {
-            if self.finality.contains(&states[i]) {
+            if self.finality.contains(&word_states[i]) {
                 let final_output = self.output(&word[..i].to_vec()) - self.lambda_i(i, output);
-                self.psi.insert(states[i], final_output);
+                self.psi.insert(word_states[i], final_output);
             }
         }
-        states.last().and_then(|tm| self.psi.insert(*tm, 0));
+        word_states.last().and_then(|tm| self.psi.insert(*tm, 0));
 
         // Update output transitions
         //
@@ -87,24 +90,24 @@ impl Transducer {
             let curr_output = self.lambda_i(i, output);
             let prev_output = self.lambda_i(i - 1, output);
             postponed_lambda_updates.push((
-                states[i - 1],
+                word_states[i - 1],
                 self.min_except[i - 1],
                 curr_output - prev_output,
             ));
         }
 
         let lambda_k = self.lambda_i(k, output);
-        add_to_or_insert(&mut self.lambda, states[k], word[k], output - lambda_k);
+        add_to_or_insert(&mut self.lambda, word_states[k], word[k], output - lambda_k);
 
-        for i in 1..new_suffix_len {
-            add_to_or_insert(&mut self.lambda, max_state + i, word[k + i], 0);
+        for i in 0..(n - k - 1) {
+            add_to_or_insert(&mut self.lambda, tkn[i], word[k + i + 1], 0);
         }
 
         for i in 0..=k {
             for ch in self.alphabet.iter() {
                 let is_lambda_defined = self
                     .lambda
-                    .get(&states[i])
+                    .get(&word_states[i])
                     .and_then(|trans| trans.get(ch))
                     .is_some();
 
@@ -115,7 +118,7 @@ impl Transducer {
                     let output =
                         self.iota + self.lambda_star(&prefix_with_ch) - self.lambda_i(i, output);
 
-                    postponed_lambda_updates.push((states[i], *ch, output));
+                    postponed_lambda_updates.push((word_states[i], *ch, output));
                 }
             }
         }
@@ -136,6 +139,7 @@ impl Transducer {
         let word_lcp = self.longest_common_prefix(&word_vec);
 
         self.increase_except_from_epsilon_to_word(&word_lcp);
+        // TODO! next step kinda fails
         // NOTE: This shouldn't reduce except as it is already minimal except in word_lcp
         self.add_entry_in_order(word, output);
         self.reduce_to_epsilon();
@@ -182,7 +186,7 @@ impl Transducer {
 
     pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
         if dictionary.is_empty() {
-            panic!("Cannot construct empty transducer");
+            panic!("Cannot construct empty transducer!");
         }
 
         let (w, o) = dictionary[0];
@@ -268,22 +272,31 @@ impl Transducer {
     }
 
     fn reduce_except_by_one(&mut self) {
-        let w = &self.min_except;
-        let t_w = self.state_sequence(&w);
+        if self.min_except.is_empty() {
+            panic!("Transduser must be minimal except in non-empty word!");
+        }
 
-        let an = w[w.len() - 1];
-        let tn = t_w[w.len()];
-        let tn_prev = t_w[w.len() - 1]; // Note: will fail if min_except = epsilon
+        let word = &self.min_except;
+        let t_w = self.state_sequence(&word);
+        let n = word.len();
+
+        let an = word[n - 1];
 
         // TODO: do this for every equal state?
-        if let Some(q) = self.state_eq(tn, &t_w) {
-            let prev_output = self.lambda[&tn_prev][&an];
-            self.delete_state(&tn);
-            self.add_delta_transition(tn_prev, an, q);
-            add_to_or_insert(&mut self.lambda, tn_prev, an, prev_output);
+        if let Some(q) = self.state_eq(t_w[n], &t_w) {
+            let prev_output = self.lambda[&t_w[n - 1]][&an];
+            self.delete_state(&t_w[n]);
+            self.add_delta_transition(t_w[n - 1], an, q);
+            add_to_or_insert(&mut self.lambda, t_w[n - 1], an, prev_output);
         }
 
         self.min_except.pop();
+    }
+
+    fn reduce_except_by_k(&mut self, k: usize) {
+        for _ in 0..k {
+            self.reduce_except_by_one();
+        }
     }
 
     // NOTE: returns the last and final state that reads the word
@@ -410,7 +423,11 @@ impl Transducer {
             Some(dq_1) => {
                 self.trans_order_partitions[dq_1.len()].remove(&q1);
                 dq_1.insert(a, q2);
-                utils::insert_or_push_in_partition(&mut self.trans_order_partitions, q1, dq_1.len());
+                utils::insert_or_push_in_partition(
+                    &mut self.trans_order_partitions,
+                    q1,
+                    dq_1.len(),
+                );
             }
             None => {
                 self.delta.insert(q1, HashMap::from([(a, q2)]));
@@ -539,5 +556,23 @@ impl Transducer {
         }
 
         return prefix;
+    }
+
+    fn add_new_states(&mut self, k: usize) -> Vec<usize> {
+        let max_state = *self.states.last().unwrap_or(&0);
+        let mut new_states = Vec::new();
+
+        for i in 1..=k {
+            self.states.insert(max_state + i);
+            new_states.push(max_state + i);
+        }
+
+        return new_states;
+    }
+
+    fn update_alphabet_with_word(&mut self, word: &[char]) {
+        for ch in word {
+            self.alphabet.insert(*ch);
+        }
     }
 }
