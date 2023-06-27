@@ -53,11 +53,6 @@ impl Transducer {
 
         let word_states = self.state_sequence(&word);
 
-        // Update transition order partitions
-        for i in (k + 1)..(word_states.len() - 1) {
-            self.trans_order_partitions[1].insert(word_states[i]);
-        }
-
         if n - k > 0 {
             self.trans_order_partitions[0].insert(*word_states.last().unwrap());
         }
@@ -120,10 +115,12 @@ impl Transducer {
 
         // NOTE: this is a bit sketchy case.
         // Im trying to add a prefix of a word in the transducer
-        let tn_output = max(output, self.output(&word)) - self.output(&word);
-        word_states
-            .last()
-            .and_then(|tm| self.psi.insert(*tm, tn_output));
+        if n - k == 0 {
+            let tn_output = max(output, self.output(&word)) - self.output(&word);
+            word_states
+                .last()
+                .and_then(|tm| self.psi.insert(*tm, tn_output));
+        }
 
         // Update iota last, as lambda and psi use the old value
         self.iota = min(self.iota, output);
