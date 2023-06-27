@@ -162,7 +162,8 @@ impl Transducer {
                 || has_more_transitions
                 || self.finality.contains(&curr_state)
             {
-                self.canonicalise_min_except();
+                // TODO!
+                // self.canonicalise_from_state();
                 break;
             }
 
@@ -359,6 +360,11 @@ impl Transducer {
         // No transitions if delta(state) is undefined
         let state_trans_order = self.delta.get(&state).map_or(0, |trans| trans.len());
 
+        // NOTE:
+        // - Here i search for eqivalent states by looking only at those states
+        //   that have the same number of transitions.
+        // - This is the only purpose of trans_order_partitions
+        // TODO: Another way to do this, is to look in delta_inv of the successor or in finality
         for q in &self.trans_order_partitions[state_trans_order] {
             if t_w.contains(q) {
                 continue;
@@ -436,9 +442,10 @@ impl Transducer {
         }
     }
 
-    // NOTE: make sure using min_except is enough
+    // NOTE: this works only for a slice of min_except
     fn lambda_i(&self, i: usize, beta: usize) -> usize {
         let word_prefix_i = &self.min_except[..i].to_vec();
+        println!("lambda star reading: {:?}", word_prefix_i);
         return min(self.iota + self.lambda_star(word_prefix_i), beta);
     }
 
@@ -488,46 +495,29 @@ impl Transducer {
         self.psi.remove(state);
     }
 
-    fn canonicalise_min_except(&mut self) {
-        let t_w = self.state_sequence(&self.min_except);
+    // TODO!: The current implementation is totally wrong.
+    // In order to do this i must carry min(delta(q, ch))
+    // to the first state in the backwards sequence,
+    // that is final or has more than 1 transitions.
+    // If there is no such state the output is carried out to iota
+    fn canonicalise_from_state(&mut self, state: usize) {
+        todo!();
+        // loop {
+        //     let has_more_transitions = self
+        //         .delta
+        //         .get(&curr_state)
+        //         .is_some_and(|trans| trans.len() > 1);
 
-        // NOTE: t_w shouldn't be empty
-        let mut i = t_w.len() - 1;
-        let mut curr_state = t_w[i - 1];
+        //     if curr_state == self.init_state
+        //         || self.finality.contains(&curr_state)
+        //         || has_more_transitions
+        //     {
+        //         break;
+        //     }
 
-        // Find the index at which output can be accumulated the earliest
-        loop {
-            let has_more_transitions = self
-                .delta
-                .get(&curr_state)
-                .is_some_and(|trans| trans.len() > 1);
-
-            if curr_state == self.init_state
-                || self.finality.contains(&curr_state)
-                || has_more_transitions
-            {
-                break;
-            }
-
-            i -= 1;
-            curr_state = t_w[i];
-        }
-
-        let word_output = self.output(&self.min_except);
-        let output = word_output - self.lambda_i(i - 1, word_output);
-
-        add_to_or_insert(&mut self.lambda, curr_state, self.min_except[i - 1], output);
-
-        for j in i..t_w.len() {
-            curr_state = t_w[j];
-
-            if self.finality.contains(&curr_state) {
-                self.psi.insert(curr_state, 0);
-            } else {
-                add_to_or_insert(&mut self.lambda, curr_state, self.min_except[j], 0);
-            }
-        }
-        // TODO: consider iota update case
+        //     i -= 1;
+        //     curr_state = t_w[i];
+        // }
     }
 
     fn longest_common_prefix(&self, word: &Vec<char>) -> Vec<char> {
