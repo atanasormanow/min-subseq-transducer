@@ -96,11 +96,13 @@ impl Transducer {
             ));
         }
 
-        let lambda_k = self.lambda_i(k, output);
-        add_to_or_insert(&mut self.lambda, word_states[k], word[k], output - lambda_k);
+        if n - k > 0 {
+            let lambda_k = self.lambda_i(k, output);
+            add_to_or_insert(&mut self.lambda, word_states[k], word[k], output - lambda_k);
+        }
 
-        for i in 0..(n - k - 1) {
-            add_to_or_insert(&mut self.lambda, tkn[i], word[k + i + 1], 0);
+        for i in 1..(n - k) {
+            add_to_or_insert(&mut self.lambda, tkn[i - 1], word[k + i], 0);
         }
 
         for i in 0..=k {
