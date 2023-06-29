@@ -25,6 +25,8 @@ pub struct Transducer {
 }
 
 impl Transducer {
+    /** Adds a new entry to the transducer,
+     * that is lexicographically greater than the last added entry*/
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
         let word: Vec<char> = word.chars().collect();
         let n = word.len();
@@ -129,57 +131,53 @@ impl Transducer {
         self.min_except = word;
     }
 
+    /** Adds a new entry to the transducer,
+     * that is NOT lexicographically greater than the last added entry*/
     pub fn add_entry_out_of_order(&mut self, word: &str, output: usize) {
         let word_vec = word.chars().collect();
         let word_lcp = self.longest_common_prefix(&word_vec);
 
         self.increase_except_from_epsilon_to_word(&word_lcp);
-        // TODO! next step kinda fails
-        // NOTE: This shouldn't reduce except as it is already minimal except in word_lcp
         self.add_entry_in_order(word, output);
         self.reduce_to_epsilon();
     }
 
+    /** Removes the entry with the given word from the transducer */
     pub fn remove_entry_with_word(&mut self, word_raw: &str) {
-        if word_raw == "" {
+        if word_raw.is_empty() {
             panic!("The transducer is undefined for epsilon input!");
         }
 
         let word = word_raw.chars().collect();
-        let mut curr_state = self.increase_except_from_epsilon_to_word(&word);
-        let mut prev_state;
+        self.increase_except_from_epsilon_to_word(&word);
 
-        self.finality.remove(&curr_state);
-        self.psi.remove(&curr_state);
+        let mut t_w = self.state_sequence(&word);
+        t_w.reverse();
 
-        loop {
-            let has_more_transitions = self
-                .delta
-                .get(&curr_state)
-                .is_some_and(|trans| trans.len() > 1);
+        let (_, prev_div_state) = self
+            .find_prev_divergent_state(&t_w[0])
+            .expect("Shouldn't be removing an entry with epsilon!");
 
-            if curr_state == self.init_state
-                || has_more_transitions
-                || self.finality.contains(&curr_state)
-            {
-                // TODO!
-                // self.canonicalise_from_state();
-                break;
+        // Delete only if the current word has no continuation
+        if self.delta.get(&t_w[0]).is_none() {
+            for i in 0..t_w.len() {
+                if t_w[i] != prev_div_state {
+                    self.delete_state(&t_w[i]);
+                    self.min_except.pop();
+                } else {
+                    break;
+                }
             }
-
-            prev_state = curr_state;
-
-            // NOTE: increase_except_from_epsilon_to_word leaves the path without any convergent
-            // states, meaning that all states have only one ingoing transition
-            curr_state = self.delta_inv[&curr_state].iter().last().unwrap().1;
-
-            self.delete_state(&prev_state);
-            self.min_except.pop();
         }
 
+        self.finality.remove(&t_w[0]);
+        self.psi.remove(&t_w[0]);
+
+        self.canonicalise_min_except();
         self.reduce_to_epsilon();
     }
 
+    /** Constructs a minimal subsequential transducer from a dictionary of entries */
     pub fn from_dictionary(dictionary: Vec<(&str, usize)>) -> Self {
         if dictionary.is_empty() {
             panic!("Cannot construct empty transducer!");
@@ -197,6 +195,7 @@ impl Transducer {
         return transducer;
     }
 
+    /** Returns the output of a given word from the transducer */
     pub fn output(&self, word: &Vec<char>) -> usize {
         let final_output = self
             .state_sequence(&word)
@@ -228,9 +227,10 @@ impl Transducer {
         self.print();
     }
 
-    ///////////////////
+    // ////////////////
     // Private functions:
-    //////////////////////
+    // ///////////////////
+    /** Constructs the trivial minimal subsequential transducer from a single entry */
     fn from_entry(word: &str, output: usize) -> Self {
         let word: Vec<char> = word.chars().collect();
         let n = word.len();
@@ -267,6 +267,7 @@ impl Transducer {
         };
     }
 
+    /** Reduces the word that the transducer is minimal except by one character (from the right) */
     fn reduce_except_by_one(&mut self) {
         if self.min_except.is_empty() {
             panic!("Transduser must be minimal except in non-empty word!");
@@ -289,14 +290,15 @@ impl Transducer {
         self.min_except.pop();
     }
 
+    /** Reduces the word that the transducer is minimal except by k characters (from the right) */
     fn reduce_except_by_k(&mut self, k: usize) {
         for _ in 0..k {
             self.reduce_except_by_one();
         }
     }
 
-    // NOTE: returns the last and final state that reads the word
-    fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) -> usize {
+    /** Makes a minimal subsequential transducer minimal except in a given word */
+    fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
         if !self.min_except.is_empty() {
             panic!("Transduser must be minimal except in epsilon!");
         }
@@ -344,17 +346,14 @@ impl Transducer {
 
             self.min_except.push(word[i]);
         }
-
-        return current_state;
     }
 
+    /** Checks if a state is convergent, meaning it has more than one ingoing transitions */
     fn is_state_convergent(&self, state: usize) -> bool {
         return self.delta_inv.get(&state).map_or(0, |trans| trans.len()) > 1;
     }
 
-    // Check for equal states by:
-    // 1) have states partitioned based on their number of transitions
-    // 2) check if tn is equal to some state with the same number of transitions
+    /** Searches for an equivalent state of `state` outside of t_w */
     fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
         let state_is_final = self.finality.contains(&state);
         // No transitions if delta(state) is undefined
@@ -400,6 +399,7 @@ impl Transducer {
         return None;
     }
 
+    /** Makes the transducer minimal (except in epsilon) */
     fn reduce_to_epsilon(&mut self) {
         for _ in 0..self.min_except.len() {
             self.reduce_except_by_one();
@@ -407,6 +407,7 @@ impl Transducer {
     }
 
     // NOTE: delta[(q,a)] will panic if delta is not defined
+    /** Finds the state sequence, corresponding to a given word */
     fn state_sequence(&self, w: &Vec<char>) -> Vec<usize> {
         let mut next = self.init_state;
         let mut path = vec![next];
@@ -419,6 +420,7 @@ impl Transducer {
         return path;
     }
 
+    /** Adds a delta transition, updating delta_inv and trans_order_partitions */
     fn add_delta_transition(&mut self, q1: usize, a: char, q2: usize) {
         match self.delta.get_mut(&q1) {
             Some(dq_1) => {
@@ -442,13 +444,12 @@ impl Transducer {
         }
     }
 
-    // NOTE: this works only for a slice of min_except
     fn lambda_i(&self, i: usize, beta: usize) -> usize {
         let word_prefix_i = &self.min_except[..i].to_vec();
-        println!("lambda star reading: {:?}", word_prefix_i);
         return min(self.iota + self.lambda_star(word_prefix_i), beta);
     }
 
+    /** Returns the accumulated transition output for a given word  */
     fn lambda_star(&self, word: &Vec<char>) -> usize {
         let mut output = 0;
         let mut state = self.init_state;
@@ -461,6 +462,7 @@ impl Transducer {
         return output;
     }
 
+    /** Completely deletes a given state */
     fn delete_state(&mut self, state: &usize) {
         if *state == self.init_state {
             panic!("Cannot delete init state!");
@@ -495,31 +497,75 @@ impl Transducer {
         self.psi.remove(state);
     }
 
-    // TODO!: The current implementation is totally wrong.
-    // In order to do this i must carry min(delta(q, ch))
-    // to the first state in the backwards sequence,
-    // that is final or has more than 1 transitions.
-    // If there is no such state the output is carried out to iota
-    fn canonicalise_from_state(&mut self, state: usize) {
-        todo!();
-        // loop {
-        //     let has_more_transitions = self
-        //         .delta
-        //         .get(&curr_state)
-        //         .is_some_and(|trans| trans.len() > 1);
+    fn canonicalise_min_except(&mut self) {
+        let tn = *self
+            .state_sequence(&self.min_except)
+            .last()
+            .expect("State sequence cannot be empty!");
 
-        //     if curr_state == self.init_state
-        //         || self.finality.contains(&curr_state)
-        //         || has_more_transitions
-        //     {
-        //         break;
-        //     }
+        let mut carry = self.extract_min_from_state(&tn);
+        let mut prev_div_state = self.find_prev_divergent_state(&tn);
 
-        //     i -= 1;
-        //     curr_state = t_w[i];
-        // }
+        // NOTE: this is a transition is from delta_inv
+        while let Some((ch, q)) = prev_div_state {
+            self.lambda.entry(q).and_modify(|trans| {
+                trans.entry(ch).and_modify(|o| {
+                    *o += carry;
+                });
+            });
+
+            carry = self.extract_min_from_state(&q);
+            prev_div_state = self.find_prev_divergent_state(&q);
+        }
+
+        self.iota += carry;
     }
 
+    /** Decreases all outputs of a state with their minimum and returns the found minimum */
+    fn extract_min_from_state(&mut self, state: &usize) -> usize {
+        let mut outputs: Vec<usize> = self.lambda[state].iter().map(|(_, v)| *v).collect();
+        if let Some(v) = self.psi.get(state) {
+            outputs.push(*v);
+        }
+        let min_output = *outputs.iter().min().unwrap_or(&0);
+
+        self.psi.entry(*state).and_modify(|o| {
+            *o -= min_output;
+        });
+
+        if let Some(trans) = self.lambda.get_mut(state) {
+            for ch in trans.clone().keys() {
+                trans.entry(*ch).and_modify(|o| {
+                    *o -= min_output;
+                });
+            }
+        }
+
+        return min_output;
+    }
+
+    /** Going backwards from a state, finds the first state (and it's char for transition),
+     * that is final or has more than 1 outgoing transitions. This works only if there are no
+     * convergent states along the path */
+    fn find_prev_divergent_state(&self, state: &usize) -> Option<(char, usize)> {
+        // NOTE: assumes that the state has exactly one predecessor
+        let (mut curr_ch, mut curr_state) = self.delta_inv[state].iter().last().unwrap();
+
+        // NOTE: This shouldn't loop infinitely
+        loop {
+            if self.is_state_divergent(&curr_state) {
+                return Some((curr_ch, curr_state));
+            }
+
+            if curr_state == self.init_state {
+                return None;
+            }
+
+            (curr_ch, curr_state) = *self.delta_inv[&curr_state].iter().last().unwrap();
+        }
+    }
+
+    /** Finds the longest prefix of the words that the transducer reads */
     fn longest_common_prefix(&self, word: &Vec<char>) -> Vec<char> {
         let mut state = 0;
         let mut prefix = Vec::new();
@@ -539,6 +585,7 @@ impl Transducer {
         return prefix;
     }
 
+    /** Add k new states to the transducer */
     fn add_new_states(&mut self, k: usize) -> Vec<usize> {
         let max_state = *self.states.last().unwrap_or(&0);
         let mut new_states = Vec::new();
@@ -551,9 +598,16 @@ impl Transducer {
         return new_states;
     }
 
+    /** Add all new characters of a word in the transducer's alphabet */
     fn update_alphabet_with_word(&mut self, word: &[char]) {
         for ch in word {
             self.alphabet.insert(*ch);
         }
+    }
+
+    /** Checks if a state is final or has more than one outgoing transitions */
+    fn is_state_divergent(&self, state: &usize) -> bool {
+        return self.finality.contains(state)
+            || self.delta.get(state).is_some_and(|trans| trans.len() > 1);
     }
 }
