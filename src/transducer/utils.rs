@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 pub fn longest_common_prefix(w1: &Vec<char>, w2: &Vec<char>) -> Vec<char> {
     let mut lcp = Vec::new();
@@ -41,17 +41,5 @@ pub fn remove_from_or_delete(
         } else {
             map2.remove(k2);
         }
-    }
-}
-
-pub fn insert_or_push_in_partition(
-    partitions: &mut Vec<BTreeSet<usize>>,
-    value: usize,
-    index: usize,
-) {
-    if index < partitions.len() {
-        partitions[index].insert(value);
-    } else {
-        partitions.push(BTreeSet::from([value]));
     }
 }

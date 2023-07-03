@@ -6,22 +6,22 @@ use std::{
 
 mod tests;
 mod utils;
-use utils::{
-    add_to_or_insert, insert_or_push_in_partition, longest_common_prefix, remove_from_or_delete,
-};
+use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete};
 
+// TODO!: updatede signatures every time add_delta_transition is used
+// TODO!: remove pub and use getters
 pub struct Transducer {
-    alphabet: HashSet<char>,
-    states: BTreeSet<usize>,
-    finality: BTreeSet<usize>,
-    init_state: usize,
-    delta: HashMap<usize, HashMap<char, usize>>,
-    delta_inv: HashMap<usize, HashSet<(char, usize)>>,
-    lambda: HashMap<usize, HashMap<char, usize>>,
-    iota: usize,
-    psi: HashMap<usize, usize>,
-    min_except: Vec<char>,
-    trans_order_partitions: Vec<BTreeSet<usize>>,
+    pub alphabet: HashSet<char>,
+    pub states: BTreeSet<usize>,
+    pub finality: BTreeSet<usize>,
+    pub init_state: usize,
+    pub delta: HashMap<usize, HashMap<char, usize>>,
+    pub delta_inv: HashMap<usize, HashSet<(char, usize)>>,
+    pub lambda: HashMap<usize, HashMap<char, usize>>,
+    pub iota: usize,
+    pub psi: HashMap<usize, usize>,
+    pub min_except: Vec<char>,
+    pub states_by_signature: HashMap<(Option<usize>, BTreeSet<(char, usize, usize)>), usize>,
 }
 
 impl Transducer {
@@ -55,10 +55,7 @@ impl Transducer {
 
         let word_states = self.state_sequence(&word);
 
-        if n - k > 0 {
-            self.trans_order_partitions[0].insert(*word_states.last().unwrap());
-        }
-
+        // Update final outputs
         for i in 1..=k {
             if self.finality.contains(&word_states[i]) {
                 let final_output = self.output(&word[..i].to_vec()) - self.lambda_i(i, output);
@@ -115,8 +112,6 @@ impl Transducer {
             add_to_or_insert(&mut self.lambda, q, a, o);
         }
 
-        // NOTE: this is a bit sketchy case.
-        // Im trying to add a prefix of a word in the transducer
         if n - k == 0 {
             let tn_output = max(output, self.output(&word)) - self.output(&word);
             word_states
@@ -185,10 +180,13 @@ impl Transducer {
 
         let (w, o) = dictionary[0];
         let mut transducer = Transducer::from_entry(w, o);
+        let mut n = 1;
 
         for e in &dictionary[1..] {
             let (w, o) = *e;
+            println!("{:?} Adding {:?}", n, w);
             transducer.add_entry_in_order(w, o);
+            n += 1;
         }
 
         transducer.reduce_to_epsilon();
@@ -216,10 +214,7 @@ impl Transducer {
         println!("T iota: {:?}", self.iota);
         println!("T psi: {:?}", self.psi);
         println!("T min_except: {:?}", self.min_except);
-        println!(
-            "T partitions by transition order: {:?}",
-            self.trans_order_partitions
-        );
+        println!("T states by signature: {:?}", self.states_by_signature);
     }
 
     pub fn print_with_message(&self, message: &str) {
@@ -227,9 +222,18 @@ impl Transducer {
         self.print();
     }
 
+    pub fn get_number_of_transitions(&self) -> usize {
+        let mut n = 0;
+        for (_, trans) in &self.delta {
+            n += trans.len();
+        }
+        return n;
+    }
+
     // ////////////////
     // Private functions:
     // ///////////////////
+    //
     /** Constructs the trivial minimal subsequential transducer from a single entry */
     fn from_entry(word: &str, output: usize) -> Self {
         let word: Vec<char> = word.chars().collect();
@@ -263,7 +267,7 @@ impl Transducer {
             iota: output,
             psi: HashMap::from([(n, 0)]),
             min_except: word,
-            trans_order_partitions: vec![BTreeSet::from([n]), (0..n).collect()],
+            states_by_signature: HashMap::new(),
         };
     }
 
@@ -276,15 +280,15 @@ impl Transducer {
         let word = &self.min_except;
         let t_w = self.state_sequence(&word);
         let n = word.len();
-
         let an = word[n - 1];
 
-        // TODO: do this for every equal state?
-        if let Some(q) = self.state_eq(t_w[n], &t_w) {
+        if let Some(q) = self.state_eq(t_w[n]) {
             let prev_output = self.lambda[&t_w[n - 1]][&an];
             self.delete_state(&t_w[n]);
             self.add_delta_transition(t_w[n - 1], an, q);
             add_to_or_insert(&mut self.lambda, t_w[n - 1], an, prev_output);
+        } else {
+            self.add_signature(t_w[n]);
         }
 
         self.min_except.pop();
@@ -297,6 +301,14 @@ impl Transducer {
         }
     }
 
+    /** Makes the transducer minimal (except in epsilon) */
+    fn reduce_to_epsilon(&mut self) {
+        for _ in 0..self.min_except.len() {
+            self.reduce_except_by_one();
+        }
+        self.add_signature(self.init_state);
+    }
+
     /** Makes a minimal subsequential transducer minimal except in a given word */
     fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
         if !self.min_except.is_empty() {
@@ -305,6 +317,8 @@ impl Transducer {
 
         let mut current_state = self.init_state;
         let mut max_state = *self.states.last().expect("States cannot be empty!");
+
+        self.remove_signature(current_state);
 
         for i in 0..word.len() {
             let next_state = self.delta[&current_state][&word[i]];
@@ -326,21 +340,19 @@ impl Transducer {
                     self.psi.insert(new_state, self.psi[&next_state]);
                 }
 
-                let trans_order = self.delta.get(&next_state).map_or(0, |trans| trans.len());
-                self.trans_order_partitions[trans_order].insert(new_state);
-
-                if trans_order > 0 {
-                    for (ch, q) in self.delta[&next_state].clone() {
+                // Clone the transitions of the convergent successor
+                if let Some(trans) = self.delta.get(&next_state).cloned() {
+                    for (ch, q) in trans {
                         self.add_delta_transition(new_state, ch, q);
                     }
                 }
-
                 if let Some(output_trans) = self.lambda.get(&next_state).cloned() {
                     self.lambda.insert(new_state, output_trans);
                 }
 
                 current_state = new_state;
             } else {
+                self.remove_signature(next_state);
                 current_state = next_state;
             }
 
@@ -350,60 +362,25 @@ impl Transducer {
 
     /** Checks if a state is convergent, meaning it has more than one ingoing transitions */
     fn is_state_convergent(&self, state: usize) -> bool {
-        return self.delta_inv.get(&state).map_or(0, |trans| trans.len()) > 1;
+        return self
+            .delta_inv
+            .get(&state)
+            .is_some_and(|trans| trans.len() > 1);
     }
 
     /** Searches for an equivalent state of `state` outside of t_w */
-    fn state_eq(&self, state: usize, t_w: &Vec<usize>) -> Option<usize> {
-        let state_is_final = self.finality.contains(&state);
-        // No transitions if delta(state) is undefined
-        let state_trans_order = self.delta.get(&state).map_or(0, |trans| trans.len());
+    fn state_eq(&self, q: usize) -> Option<usize> {
+        let state_sig = self.signature(q);
 
-        // NOTE:
-        // - Here i search for eqivalent states by looking only at those states
-        //   that have the same number of transitions.
-        // - This is the only purpose of trans_order_partitions
-        // TODO: Another way to do this, is to look in delta_inv of the successor or in finality
-        for q in &self.trans_order_partitions[state_trans_order] {
-            if t_w.contains(q) {
-                continue;
-            }
-
-            let cond1 = state_is_final == self.finality.contains(q);
-            let cond2 = !state_is_final || self.psi.get(&state) == self.psi.get(q);
-            let mut cond3 = true;
-
-            for a in &self.alphabet {
-                let dsa = self.delta.get(&state).and_then(|trans| trans.get(a));
-                let dqa = self.delta.get(&q).and_then(|trans| trans.get(a));
-                let lsa = self.lambda.get(&state).and_then(|trans| trans.get(a));
-                let lqa = self.lambda.get(&q).and_then(|trans| trans.get(a));
-
-                match (dsa, dqa, lsa, lqa) {
-                    (None, None, _, _) => (),
-                    (Some(q1), Some(q2), Some(m1), Some(m2)) => {
-                        cond3 = cond3 && q1 == q2 && m1 == m2;
-                    }
-                    _ => {
-                        cond3 = false;
-                    }
-                };
-            }
-
-            // Return the first match
-            if cond1 && cond2 && cond3 {
-                return Some(*q);
+        if let Some(q_eq) = self.states_by_signature.get(&state_sig) {
+            if *q_eq != q {
+                return Some(*q_eq);
+            } else {
+                println!("FYI - this state already has this signature");
             }
         }
 
         return None;
-    }
-
-    /** Makes the transducer minimal (except in epsilon) */
-    fn reduce_to_epsilon(&mut self) {
-        for _ in 0..self.min_except.len() {
-            self.reduce_except_by_one();
-        }
     }
 
     // NOTE: delta[(q,a)] will panic if delta is not defined
@@ -420,20 +397,18 @@ impl Transducer {
         return path;
     }
 
-    /** Adds a delta transition, updating delta_inv and trans_order_partitions */
+    /** Adds a delta transition, overwriting existing transition from the given state with the
+     * given character. Updates delta_inv but does NOT update state signatures! */
     fn add_delta_transition(&mut self, q1: usize, a: char, q2: usize) {
         match self.delta.get_mut(&q1) {
             Some(dq_1) => {
-                self.trans_order_partitions[dq_1.len()].remove(&q1);
                 dq_1.insert(a, q2);
-                insert_or_push_in_partition(&mut self.trans_order_partitions, q1, dq_1.len());
             }
             None => {
                 self.delta.insert(q1, HashMap::from([(a, q2)]));
-                self.trans_order_partitions[0].remove(&q1);
-                self.trans_order_partitions[1].insert(q1);
             }
         }
+
         match self.delta_inv.get_mut(&q2) {
             Some(di_q2) => {
                 di_q2.insert((a, q1));
@@ -468,16 +443,8 @@ impl Transducer {
             panic!("Cannot delete init state!");
         }
 
-        let trans_order = self.delta.get(state).map_or(0, |trans| trans.len());
-
-        self.trans_order_partitions[trans_order].remove(state);
-
         if let Some(preds) = self.delta_inv.remove(state) {
             for (ch, q) in preds {
-                // NOTE: it can't be 0
-                let q_trans_order = self.delta.get(&q).map_or(0, |trans| trans.len());
-                self.trans_order_partitions[q_trans_order].remove(&q);
-                self.trans_order_partitions[q_trans_order - 1].insert(q);
                 remove_from_or_delete(&mut self.lambda, &q, &ch);
                 remove_from_or_delete(&mut self.delta, &q, &ch);
             }
@@ -607,7 +574,33 @@ impl Transducer {
 
     /** Checks if a state is final or has more than one outgoing transitions */
     fn is_state_divergent(&self, state: &usize) -> bool {
-        return self.finality.contains(state)
-            || self.delta.get(state).is_some_and(|trans| trans.len() > 1);
+        return self.delta.get(state).is_some_and(|trans| trans.len() > 1)
+            || self.finality.contains(state);
+    }
+
+    fn signature(&self, q: usize) -> (Option<usize>, BTreeSet<(char, usize, usize)>) {
+        let final_output = self.psi.get(&q).map(|o| *o);
+        let mut transitions = BTreeSet::new();
+
+        for ch in &self.alphabet {
+            if let Some(q_dest) = self.delta.get(&q).and_then(|q_trans| q_trans.get(&ch)) {
+                let q_out = self
+                    .lambda
+                    .get(&q)
+                    .and_then(|q_out_trans| q_out_trans.get(&ch))
+                    .expect("Lambda must be defined if delta is defined");
+                transitions.insert((*ch, *q_dest, *q_out));
+            }
+        }
+
+        return (final_output, transitions);
+    }
+
+    fn add_signature(&mut self, q: usize) {
+        self.states_by_signature.insert(self.signature(q), q);
+    }
+
+    fn remove_signature(&mut self, q: usize) {
+        self.states_by_signature.remove(&self.signature(q));
     }
 }

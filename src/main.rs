@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::{error::Error, vec};
+use std::error::Error;
 
 mod transducer;
 use transducer::Transducer;
@@ -33,7 +33,13 @@ fn main() {
                 .collect();
 
             let transducer = Transducer::from_dictionary(dictionary);
-            transducer.print();
+            // transducer.print();
+            println!("Number of states: {:?}", transducer.states.len());
+            println!("Number of transitions: {:?}", transducer.get_number_of_transitions());
+            println!("Initial output: {:?}", transducer.iota);
+            println!("Number of final states: {:?}", transducer.finality.len());
+            // TODO: should be able to ask for removal or more additions then read from another
+            // file
         }
         Err(e) => {
             println!("{:?}", e);
