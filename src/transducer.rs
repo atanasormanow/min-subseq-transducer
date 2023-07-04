@@ -179,7 +179,7 @@ impl Transducer {
         }
 
         let (w, o) = dictionary[0];
-        let mut transducer = Transducer::from_entry(w, o);
+        let mut transducer = Transducer::from_entry_with_capacity(w, o, dictionary.len() * 30);
         let mut n = 1;
 
         for e in &dictionary[1..] {
@@ -268,6 +268,43 @@ impl Transducer {
             psi: HashMap::from([(n, 0)]),
             min_except: word,
             states_by_signature: HashMap::new(),
+        };
+    }
+
+    /** Like from_entry but initializes some HashMaps with a given capacity */
+    fn from_entry_with_capacity(word: &str, output: usize, capacity: usize) -> Self {
+        let word: Vec<char> = word.chars().collect();
+        let n = word.len();
+
+        let mut alphabet = HashSet::new();
+        let mut delta = HashMap::with_capacity(capacity);
+        let mut delta_inv = HashMap::with_capacity(capacity);
+        let mut lambda = HashMap::with_capacity(capacity);
+
+        for i in 0..n {
+            alphabet.insert(word[i]);
+
+            let state_transition = HashMap::from([(word[i], i + 1)]);
+            delta.insert(i, state_transition);
+
+            delta_inv.insert(i + 1, HashSet::from([(word[i], i)]));
+
+            let state_output = HashMap::from([(word[i], 0)]);
+            lambda.insert(i, state_output);
+        }
+
+        return Self {
+            alphabet,
+            states: (0..=n).collect(),
+            finality: BTreeSet::from([n]),
+            init_state: 0,
+            delta,
+            delta_inv,
+            lambda,
+            iota: output,
+            psi: HashMap::from([(n, 0)]),
+            min_except: word,
+            states_by_signature: HashMap::with_capacity(capacity),
         };
     }
 
