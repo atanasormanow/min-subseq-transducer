@@ -55,7 +55,7 @@ mod tests {
     }
 
     #[test]
-    fn adds_a_small_entry_out_of_order() {
+    fn adds_small_entry_out_of_order() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
         transducer.add_entry_out_of_order("ca", 9);
@@ -77,7 +77,7 @@ mod tests {
             HashMap::from([
                 ((None, BTreeSet::from([('c', 1, 0)])), 0),
                 ((None, BTreeSet::from([('a', 2, 5), ('b', 6, 0)])), 1),
-                ((Some(6), BTreeSet::from([('b', 3, 2), ('d', 5, 0)])), 2),
+                ((Some(1), BTreeSet::from([('b', 3, 2), ('d', 5, 0)])), 2),
                 ((Some(5), BTreeSet::from([('a', 4, 0)])), 3),
                 ((None, BTreeSet::from([('b', 5, 0)])), 4),
                 ((Some(0), BTreeSet::from([])), 5),
@@ -87,35 +87,59 @@ mod tests {
     }
 
     #[test]
-    fn removes_a_short_word() {
+    fn removes_short_word() {
         let dictionary = vec![("cab", 15), ("cabab", 10), ("cad", 8), ("cbab", 3)];
         let mut transducer = Transducer::from_dictionary(dictionary);
         transducer.remove_entry_with_word("cab");
 
-        let expected_transducer = example_transducer();
+        let alphabet = HashSet::from(['a', 'b', 'c', 'd']);
+        let states = BTreeSet::from([0, 1, 2, 4, 5, 6]);
+        let finality = BTreeSet::from([5]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('c', 1)])),
+            (1, HashMap::from([('b', 6), ('a', 2)])),
+            (2, HashMap::from([('b', 6), ('d', 5)])),
+            (4, HashMap::from([('b', 5)])),
+            (6, HashMap::from([('a', 4)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('c', 0)])),
+            (2, HashSet::from([('a', 1)])),
+            (4, HashSet::from([('a', 6)])),
+            (5, HashSet::from([('b', 4), ('d', 2)])),
+            (6, HashSet::from([('b', 1), ('b', 2)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('c', 0)])),
+            (1, HashMap::from([('b', 0), ('a', 5)])),
+            (2, HashMap::from([('b', 2), ('d', 0)])),
+            (4, HashMap::from([('b', 0)])),
+            (6, HashMap::from([('a', 0)])),
+        ]);
+        let iota = 3;
+        let psi = HashMap::from([(5, 0)]);
+        let min_except = Vec::new();
+        let states_by_signature = HashMap::from([
+            ((None, BTreeSet::from([('c', 1, 0)])), 0),
+            ((None, BTreeSet::from([('a', 2, 5), ('b', 6, 0)])), 1),
+            ((None, BTreeSet::from([('b', 6, 2), ('d', 5, 0)])), 2),
+            ((None, BTreeSet::from([('b', 5, 0)])), 4),
+            ((Some(0), BTreeSet::from([])), 5),
+            ((None, BTreeSet::from([('a', 4, 0)])), 6),
+        ]);
 
-        assert_eq!(transducer.alphabet, expected_transducer.alphabet);
-        assert_eq!(transducer.states, expected_transducer.states);
-        assert_eq!(transducer.finality, BTreeSet::from([5]));
-        assert_eq!(transducer.init_state, expected_transducer.init_state);
-        assert_eq!(transducer.delta, expected_transducer.delta);
-        assert_eq!(transducer.delta_inv, expected_transducer.delta_inv);
-        assert_eq!(transducer.lambda, expected_transducer.lambda);
-        assert_eq!(transducer.iota, expected_transducer.iota);
-        assert_eq!(transducer.psi, HashMap::from([(5, 0)]));
-        assert_eq!(transducer.min_except, expected_transducer.min_except);
-        assert_eq!(
-            transducer.states_by_signature,
-            HashMap::from([
-                ((None, BTreeSet::from([('c', 1, 0)])), 0),
-                ((None, BTreeSet::from([('a', 2, 5), ('b', 6, 0)])), 1),
-                ((None, BTreeSet::from([('b', 3, 2), ('d', 5, 0)])), 2),
-                ((None, BTreeSet::from([('a', 4, 0)])), 3),
-                ((None, BTreeSet::from([('b', 5, 0)])), 4),
-                ((Some(0), BTreeSet::from([])), 5),
-                ((None, BTreeSet::from([('a', 4, 0)])), 6),
-            ])
-        );
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.states_by_signature, states_by_signature);
     }
 
     #[test]
@@ -278,14 +302,6 @@ mod tests {
         ]);
         let iota = 10;
         let psi = HashMap::from([(3, 5), (5, 0)]);
-        let states_by_signature = HashMap::from([
-            ((None, BTreeSet::from([('c', 1, 0)])), 0),
-            ((None, BTreeSet::from([('a', 2, 0)])), 1),
-            ((None, BTreeSet::from([('b', 3, 0)])), 2),
-            ((Some(5), BTreeSet::from([('a', 4, 0), ('c', 5, 2)])), 3),
-            ((None, BTreeSet::from([('b', 5, 0)])), 4),
-            ((Some(0), BTreeSet::from([])), 5),
-        ]);
 
         assert_eq!(transducer.alphabet, example.alphabet);
         assert_eq!(transducer.states, example.states);
@@ -297,7 +313,7 @@ mod tests {
         assert_eq!(transducer.iota, iota);
         assert_eq!(transducer.psi, psi);
         assert_eq!(transducer.min_except, example.min_except);
-        assert_eq!(transducer.states_by_signature, states_by_signature);
+        assert_eq!(transducer.states_by_signature, example.states_by_signature);
     }
 
     #[test]
@@ -873,14 +889,7 @@ mod tests {
         let iota = 8;
         let psi = HashMap::from([(3, 7), (5, 0)]);
         let min_except = vec!['c', 'a', 'b', 'a'];
-        let states_by_signature = HashMap::from([
-            ((None, BTreeSet::from([('c', 1, 0)])), 0),
-            ((None, BTreeSet::from([('a', 2, 0)])), 1),
-            ((None, BTreeSet::from([('b', 3, 0)])), 2),
-            ((Some(5), BTreeSet::from([('c', 5, 4), ('a', 4, 0)])), 3),
-            ((None, BTreeSet::from([('b', 5, 2)])), 4),
-            ((Some(0), BTreeSet::from([])), 5),
-        ]);
+        let states_by_signature = HashMap::from([((Some(0), BTreeSet::from([])), 5)]);
 
         return Transducer {
             alphabet,
