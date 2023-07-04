@@ -1,7 +1,5 @@
 #[cfg(test)]
 
-// TODO: add a test for a bigger dictionary
-// TODO: test states_by_signature
 mod tests {
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
