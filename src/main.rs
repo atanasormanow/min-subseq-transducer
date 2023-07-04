@@ -33,11 +33,10 @@ fn main() {
                 .collect();
 
             let transducer = Transducer::from_dictionary(dictionary);
-            // transducer.print();
-            println!("Number of states: {:?}", transducer.states.len());
+            println!("Number of states: {:?}", transducer.get_states().len());
             println!("Number of transitions: {:?}", transducer.get_number_of_transitions());
-            println!("Initial output: {:?}", transducer.iota);
-            println!("Number of final states: {:?}", transducer.finality.len());
+            println!("Initial output: {:?}", transducer.get_initial_output());
+            println!("Number of final states: {:?}", transducer.get_finality().len());
             // TODO: should be able to ask for removal or more additions then read from another
             // file
         }

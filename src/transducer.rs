@@ -8,23 +8,33 @@ mod tests;
 mod utils;
 use utils::{add_to_or_insert, longest_common_prefix, remove_from_or_delete};
 
-// TODO!: updatede signatures every time add_delta_transition is used
-// TODO!: remove pub and use getters
 pub struct Transducer {
-    pub alphabet: HashSet<char>,
-    pub states: BTreeSet<usize>,
-    pub finality: BTreeSet<usize>,
-    pub init_state: usize,
-    pub delta: HashMap<usize, HashMap<char, usize>>,
-    pub delta_inv: HashMap<usize, HashSet<(char, usize)>>,
-    pub lambda: HashMap<usize, HashMap<char, usize>>,
-    pub iota: usize,
-    pub psi: HashMap<usize, usize>,
-    pub min_except: Vec<char>,
-    pub states_by_signature: HashMap<(Option<usize>, BTreeSet<(char, usize, usize)>), usize>,
+    alphabet: HashSet<char>,
+    states: BTreeSet<usize>,
+    finality: BTreeSet<usize>,
+    init_state: usize,
+    delta: HashMap<usize, HashMap<char, usize>>,
+    delta_inv: HashMap<usize, HashSet<(char, usize)>>,
+    lambda: HashMap<usize, HashMap<char, usize>>,
+    iota: usize,
+    psi: HashMap<usize, usize>,
+    min_except: Vec<char>,
+    states_by_signature: HashMap<(Option<usize>, BTreeSet<(char, usize, usize)>), usize>,
 }
 
 impl Transducer {
+    pub fn get_states(&self) -> &BTreeSet<usize> {
+        return &self.states;
+    }
+
+    pub fn get_finality(&self) -> &BTreeSet<usize> {
+        return &self.finality;
+    }
+
+    pub fn get_initial_output(&self) -> usize {
+        return self.iota;
+    }
+
     /** Adds a new entry to the transducer,
      * that is lexicographically greater than the last added entry*/
     pub fn add_entry_in_order(&mut self, word: &str, output: usize) {
