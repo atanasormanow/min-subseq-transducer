@@ -141,6 +141,59 @@ mod tests {
     }
 
     #[test]
+    fn removes_cheap_short_word() {
+        let dictionary = vec![("abc", 10), ("abcc", 13), ("abcd", 15)];
+        let mut transducer = Transducer::from_dictionary(dictionary);
+        transducer.remove_entry_with_word("abc");
+
+        let alphabet = HashSet::from(['a', 'b', 'c', 'd']);
+        let states = BTreeSet::from([0, 1, 2, 3, 4]);
+        let finality = BTreeSet::from([4]);
+        let init_state = 0;
+        let delta = HashMap::from([
+            (0, HashMap::from([('a', 1)])),
+            (1, HashMap::from([('b', 2)])),
+            (2, HashMap::from([('c', 3)])),
+            (3, HashMap::from([('d', 4), ('c', 4)])),
+        ]);
+        let delta_inv = HashMap::from([
+            (1, HashSet::from([('a', 0)])),
+            (2, HashSet::from([('b', 1)])),
+            (3, HashSet::from([('c', 2)])),
+            (4, HashSet::from([('c', 3), ('d', 3)])),
+        ]);
+        let lambda = HashMap::from([
+            (0, HashMap::from([('a', 0)])),
+            (1, HashMap::from([('b', 0)])),
+            (2, HashMap::from([('c', 0)])),
+            (3, HashMap::from([('c', 0), ('d', 2)])),
+        ]);
+        let iota = 13;
+        let psi = HashMap::from([(4, 0)]);
+        let min_except = Vec::new();
+        let states_by_signature = HashMap::from([
+            ((None, BTreeSet::from([('a', 1, 0)])), 0),
+            ((None, BTreeSet::from([('b', 2, 0)])), 1),
+            ((None, BTreeSet::from([('c', 3, 0)])), 2),
+            ((None, BTreeSet::from([('c', 4, 0), ('d', 4, 2)])), 3),
+            ((Some(0), BTreeSet::from([])), 4),
+        ]);
+
+        assert_eq!(transducer.alphabet, alphabet);
+        assert_eq!(transducer.states, states);
+        assert_eq!(transducer.finality, finality);
+        assert_eq!(transducer.init_state, init_state);
+        assert_eq!(transducer.delta, delta);
+        assert_eq!(transducer.delta_inv, delta_inv);
+        assert_eq!(transducer.lambda, lambda);
+        assert_eq!(transducer.iota, iota);
+        assert_eq!(transducer.psi, psi);
+        assert_eq!(transducer.min_except, min_except);
+        assert_eq!(transducer.states_by_signature, states_by_signature);
+
+    }
+
+    #[test]
     fn construct_transducer_from_entry_and_add_word_in_order() {
         let mut transducer = Transducer::from_entry("baba", 10);
         transducer.add_entry_in_order("bc", 15);
