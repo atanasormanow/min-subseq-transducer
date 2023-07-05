@@ -150,7 +150,7 @@ impl Transducer {
     /** Removes the entry with the given word from the transducer */
     pub fn remove_entry_with_word(&mut self, word_raw: &str) {
         if word_raw.is_empty() {
-            panic!("The transducer is undefined for epsilon input!");
+            panic!("The transducer cannot take epsilon as input!");
         }
 
         let word = word_raw.chars().collect();
@@ -159,12 +159,17 @@ impl Transducer {
         let mut t_w = self.state_sequence(&word);
         t_w.reverse();
 
-        let (_, prev_div_state) = self
-            .find_prev_divergent_state(&t_w[0])
-            .expect("Shouldn't be removing an entry with epsilon!");
+        self.print_with_message("After incresing min except");
+        println!("Searching for prev div state of {:?}", t_w[0]);
 
         // Delete only if the current word has no continuation
         if self.delta.get(&t_w[0]).is_none() {
+            // TODO: This won't work if the word, that is being deleted,
+            // is the last one in the dictionary
+            let (_, prev_div_state) = self
+                .find_prev_divergent_state(&t_w[0])
+                .expect("Shouldn't be removing an entry with epsilon!");
+
             for i in 0..t_w.len() {
                 if t_w[i] != prev_div_state {
                     self.delete_state(&t_w[i]);
@@ -194,7 +199,7 @@ impl Transducer {
 
         for e in &dictionary[1..] {
             let (w, o) = *e;
-            println!("{:?} Adding {:?}", n, w);
+            // println!("{:?} Adding {:?}", n, w);
             transducer.add_entry_in_order(w, o);
             n += 1;
         }
