@@ -118,6 +118,31 @@ impl Transducer {
             }
         }
 
+        // Update output transitions of the last state
+        //
+        // TODO: refactor
+        //
+        // NOTE: This is neccessary because add_entry_in_order is used in add_entry_out_of_order.
+        // Which means that the added word may be a prefix of some exisiting word in the transducer
+        let tn = word_states.last().expect("Idk at this point; TODO");
+        for ch in self.alphabet.iter() {
+            let is_lambda_defined = self
+                .lambda
+                .get(&tn)
+                .and_then(|trans| trans.get(ch))
+                .is_some();
+
+            if is_lambda_defined {
+                let mut word_with_ch = word.to_vec();
+                word_with_ch.push(*ch);
+
+                // NOTE: k = n at this point, idk
+                let output = self.iota + self.lambda_star(&word_with_ch) - self.lambda_i(k, output);
+
+                postponed_lambda_updates.push((*tn, *ch, output));
+            }
+        }
+
         for (q, a, o) in postponed_lambda_updates {
             add_to_or_insert(&mut self.lambda, q, a, o);
         }
@@ -159,13 +184,11 @@ impl Transducer {
         let mut t_w = self.state_sequence(&word);
         t_w.reverse();
 
-        self.print_with_message("After incresing min except");
-        println!("Searching for prev div state of {:?}", t_w[0]);
-
         // Delete only if the current word has no continuation
         if self.delta.get(&t_w[0]).is_none() {
             // TODO: This won't work if the word, that is being deleted,
             // is the last one in the dictionary
+            // FIX: just check if that is the case and cover it
             let (_, prev_div_state) = self
                 .find_prev_divergent_state(&t_w[0])
                 .expect("Shouldn't be removing an entry with epsilon!");
@@ -218,31 +241,22 @@ impl Transducer {
         return self.iota + self.lambda_star(&word) + final_output;
     }
 
-    pub fn print(&self) {
-        println!("T alphabet: {:?}", self.alphabet);
-        println!("T states: {:?}", self.states);
-        println!("T finality: {:?}", self.finality);
-        println!("T init_state: {:?}", self.init_state);
-        println!("T delta: {:?}", self.delta);
-        println!("T delta inversed: {:?}", self.delta_inv);
-        println!("T lambda: {:?}", self.lambda);
-        println!("T iota: {:?}", self.iota);
-        println!("T psi: {:?}", self.psi);
-        println!("T min_except: {:?}", self.min_except);
-        println!("T states by signature: {:?}", self.states_by_signature);
-    }
-
-    pub fn print_with_message(&self, message: &str) {
-        println!("{:?}", message);
-        self.print();
-    }
-
     pub fn get_number_of_transitions(&self) -> usize {
         let mut n = 0;
         for (_, trans) in &self.delta {
             n += trans.len();
         }
         return n;
+    }
+
+    pub fn print(&self) {
+        println!("Number of states: {:?}", self.get_states().len());
+        println!(
+            "Number of transitions: {:?}",
+            self.get_number_of_transitions()
+        );
+        println!("Initial output: {:?}", self.get_initial_output());
+        println!("Number of final states: {:?}", self.get_finality().len());
     }
 
     // ////////////////
@@ -364,7 +378,7 @@ impl Transducer {
     /** Makes a minimal subsequential transducer minimal except in a given word */
     fn increase_except_from_epsilon_to_word(&mut self, word: &Vec<char>) {
         if !self.min_except.is_empty() {
-            panic!("Transduser must be minimal except in epsilon!");
+            panic!("transduser must be minimal except in epsilon!");
         }
 
         let mut current_state = self.init_state;
@@ -517,10 +531,8 @@ impl Transducer {
     }
 
     fn canonicalise_min_except(&mut self) {
-        let tn = *self
-            .state_sequence(&self.min_except)
-            .last()
-            .expect("State sequence cannot be empty!");
+        let t_w = self.state_sequence(&self.min_except);
+        let tn = *t_w.last().expect("State sequence cannot be empty!");
 
         let mut carry = self.extract_min_from_state(&tn);
         let mut prev_div_state = self.find_prev_divergent_state(&tn);
@@ -542,7 +554,11 @@ impl Transducer {
 
     /** Decreases all outputs of a state with their minimum and returns the found minimum */
     fn extract_min_from_state(&mut self, state: &usize) -> usize {
-        let mut outputs: Vec<usize> = self.lambda[state].iter().map(|(_, v)| *v).collect();
+        // TODO! This could be empty
+        let mut outputs: Vec<usize> = self.lambda.get(state).map_or(Vec::new(), |out_trans| {
+            out_trans.iter().map(|(_, v)| *v).collect()
+        });
+
         if let Some(v) = self.psi.get(state) {
             outputs.push(*v);
         }
@@ -567,6 +583,10 @@ impl Transducer {
      * that is final or has more than 1 outgoing transitions. This works only if there are no
      * convergent states along the path */
     fn find_prev_divergent_state(&self, state: &usize) -> Option<(char, usize)> {
+        // TODO! This could happen
+        if *state == self.init_state {
+            return None;
+        }
         // NOTE: assumes that the state has exactly one predecessor
         let (mut curr_ch, mut curr_state) = self.delta_inv[state].iter().last().unwrap();
 
@@ -654,5 +674,19 @@ impl Transducer {
 
     fn remove_signature(&mut self, q: usize) {
         self.states_by_signature.remove(&self.signature(q));
+    }
+
+    fn print_debug(&self) {
+        println!("T alphabet: {:?}", self.alphabet);
+        println!("T states: {:?}", self.states);
+        println!("T finality: {:?}", self.finality);
+        println!("T init_state: {:?}", self.init_state);
+        println!("T delta: {:?}", self.delta);
+        println!("T delta inversed: {:?}", self.delta_inv);
+        println!("T lambda: {:?}", self.lambda);
+        println!("T iota: {:?}", self.iota);
+        println!("T psi: {:?}", self.psi);
+        println!("T min_except: {:?}", self.min_except);
+        println!("T states by signature: {:?}", self.states_by_signature);
     }
 }
